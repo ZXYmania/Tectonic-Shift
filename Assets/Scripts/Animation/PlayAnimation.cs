@@ -48,10 +48,6 @@ public class PlayAnimation
 		return (currentFrame >= m_frames.Count);
 	}	
 	
-	public void AddFrame(Sprite givenSprite)
-	{
-		
-	}
     public void AddFrame(Texture2D givenTexture, Rect givenRect)
     {
         Sprite givenSprite = Sprite.Create(givenTexture, givenRect, new Vector2(0, 0));

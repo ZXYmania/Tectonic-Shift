@@ -3,17 +3,15 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class Position
+public struct Position
 {
     public int x;
     public int y;
-    protected int index;
 
     public Position(int x, int y)
     {
         this.x = x;
         this.y = y;
-        this.index = Convert.ToInt32(string.Format("{0}0{1}", x, y));
     }
 
     public Vector2 GetVector()
@@ -22,49 +20,131 @@ public class Position
     }
     public override int GetHashCode()
     {
-        return index;   
+        int index = (x+ "0" +y).GetHashCode();
+        return index;
     }
+
+    public static bool operator ==(Position c1, Position c2)
+    {
+        return c1.Equals(c2);
+    }
+
+    public static bool operator !=(Position c1, Position c2) => !c1.Equals(c2);
     public override bool Equals(object obj)
     {
-        return Equals(obj as Position);
+        if (obj is Position)
+        {
+            return Equals((Position) obj);
+        }
+        return false;
     }
 
     public bool Equals(Position obj)
     {
         return obj != null && obj.x == this.x && obj.y == this.y;
     }
+
+    public override string ToString()
+    {
+        return "(" + x + "," + y + ")";
+    }
 }
-public class Tile : MonoBehaviour
+public class Tile : Animated, Clickable
 {
     public static Tile CreateTile(int x, int y)
     {
         GameObject gameObject = new GameObject();
+        gameObject.name = "tile("+ x + "," + y + ")";
         BoxCollider2D m_collider = gameObject.AddComponent<BoxCollider2D>();
+        m_collider.offset = new Vector2(0.5f, 0.5f);
         Tile tile = gameObject.AddComponent<Tile>();
-        tile.initialise(x,y);
+        tile.position = new Position(x, y);
         return tile;
     }
     public Position position { get; protected set; }
-
-    protected void initialise(int x, int y)
+    public bool selected;
+    public bool hovered;
+    public bool edge;
+    protected override void Initialise()
     {
-        this.position = new Position(x, y);
-    }
-
-    protected void initialise(Position position)
-    {
-        this.position = position;
+        base.Initialise();
+        AddAnimationLayer("plate", "plates", Color.black, true);
+        AddAnimationLayer("border", "plates", Color.red, true);
+        m_animationLayer["border"].SetVisible(false);
+        SetTransform(position.x, position.y);
+        selected = false;
+        hovered = false;
+        edge = false;
     }
 
     void Start()
     {
-        transform.position = new Vector3(position.x, position.y, 0);
-        gameObject.GetComponent<Renderer>().material = Resources.Load("molten_core") as Material;
+        Initialise();
     }
 
     // Update is called once per frame
     void Update()
     {
-        
+
+        if ((selected || hovered) != m_animationLayer["border"].GetVisible())
+        {
+            m_animationLayer["border"].SetVisible(selected||hovered);
+        }
+        Animate();
+    }
+
+    void OnMouseDown()
+    {
+        if (!selected)
+        {
+            Mode.Select(this);
+        }
+    }
+
+    void OnMouseOver()
+    {
+        OnHover();
+        Mode.Hover(this);
+    }
+
+    void OnMouseExit()
+    {
+        if(!selected)
+        {
+            UnHover();
+        }
+    }
+
+    public override string ToString()
+    {
+        return position.ToString();
+    }
+
+    public bool IsSelected() { return selected; }
+
+    public void OnHover()
+    {
+        hovered = true;
+    }
+
+    public void UnHover()
+    {
+        hovered = false;
+    }
+    public void OnSelect()
+    {
+        selected = true;
+    }
+
+    public void UnSelect()
+    {
+        selected = false;
+    }
+
+    public void SetTerrain()
+    {
+        m_animationLayer["plate"].ChangeAnimation(1);
+        m_animationLayer["border"].ChangeAnimation(1);
+        edge = true;
     }
 }

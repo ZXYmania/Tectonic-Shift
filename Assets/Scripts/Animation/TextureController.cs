@@ -29,8 +29,8 @@ public static class TextureController
         layerList = new Dictionary<string, SpriteMap>();
 		LoadSpriteMaps();
 	}
-	
-	private static void LoadSpriteMaps()
+
+    private static void LoadSpriteMaps()
 	{
 		Color currentColour = transparent;		
 		//Get the texture folder
@@ -86,7 +86,7 @@ public static class TextureController
                 while (givenTexture.GetPixel(0, i).a == 0)
                 {
                     i++;
-                    if (i >= currentAnimationBorder.size.x)
+                    if (i == givenTexture.height)
                     {
                         break;
                     }
@@ -171,6 +171,5 @@ public static class TextureController
             return layerList[id];
         }
         throw new TextureNotfoundException("Texture " + layerName + " with a border of " + givenColour + " is not found");
-
     }
 }

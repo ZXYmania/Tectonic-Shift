@@ -2,17 +2,18 @@
 using System.Collections;
 using System.Collections.Generic;
 
-public class AnimationOutofBoundsException : System.Exception
-{
-        public AnimationOutofBoundsException(string message) : base(message)
-    {
 
-    }
-}
 
 public class AnimationLayer 
 {
-	string m_name;
+    public class AnimationOutofBoundsException : System.Exception
+    {
+        public AnimationOutofBoundsException(string message) : base(message)
+        {
+
+        }
+    }
+    string m_name;
     public string GetName() { return m_name; }
 	string currentSpriteMap;
     int currentAnimation;
