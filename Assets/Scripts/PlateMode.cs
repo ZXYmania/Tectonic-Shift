@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using Unity.Jobs;
@@ -5,13 +6,61 @@ using UnityEngine;
 
 public class PlateMode : Mode
 {
-    public static List<Position> draw;
+    public static List<Position> draw_hover;
+    public static List<Position> draw_selected;
     protected static bool waiting;
-    public PlateMode()
+
+    void Start()
     {
+        if (current_menu == null)
+        {
+            SetUp();
+        }
         Initialise();
     }
 
+    void Update()
+    {
+        MoveCamera();
+        if(Input.GetKeyDown( KeyCode.Space))
+        {
+            SaveFile<Plate>(Plate.plate);
+        }
+        if(Input.GetKeyDown(KeyCode.Return))
+        {
+            List<Plate> load = LoadFile<Plate>();
+            for(int i = 0; i < load.Count; i++)
+            {
+                Plate.CreatePlate((load[i]));
+            }
+        }
+        if(!Input.GetKeyDown(KeyCode.Mouse0) && Input.GetKeyDown(KeyCode.Mouse1))
+        {
+            if (selected.Count > 0)
+            {
+                selected[selected.Count - 1].UnSelect();
+                selected[selected.Count - 1].UnHover();
+                List<Position> unselected = draw_selected;
+                if (selected.Count > 1)
+                {
+                    int index = draw_selected.IndexOf(((Tile)selected[selected.Count - 2]).position);
+                    unselected = draw_selected.GetRange(index + 1, draw_selected.Count - index - 1);
+                    draw_selected.RemoveRange(index + 1, draw_selected.Count - index - 1);
+                }
+                else
+                {
+                    draw_selected.Clear();
+                    ClearHover();
+                }
+                for (int i = 0; i < unselected.Count; i++)
+                {
+                    Map.map[unselected[i]].UnSelect();
+                }
+                selected.RemoveAt(selected.Count - 1);
+                OnHover();
+            }
+        }
+    }
     public class PlateDrawContoller : DrawContoller
     {
         static JobHandle current_job;
@@ -24,8 +73,7 @@ public class PlateMode : Mode
             {
                 return -1;
             }
-
-            return Mathf.Abs(result.x) + Mathf.Abs(result.y);
+            return result.x*result.x + result.y*result.y;
         }
 
         public bool QuickStop()
@@ -66,66 +114,112 @@ public class PlateMode : Mode
         {
             try
             {
-                draw = Map.DrawLine(start, destination, new PlateDrawContoller());
-                for (int i = 0; i < draw.Count; i++)
+                draw_hover = Map.DrawLine(start, destination, new PlateDrawContoller());
+                for (int i = 0; i < draw_hover.Count; i++)
                 {
-                    Map.map[draw[i]].OnHover();
+                    Map.map[draw_hover[i]].OnHover();
                 }
             }
             catch (Map.NoPathException)
             {
-
+                Map.map[destination].UnHover();
             }
         }
     }
 
     public override void OnSelect()
     {
-        if (selected.Count == 2)
+        if (selected.Count > 1)
         {
-            if (draw.Count > 0)
+            Tile destination = (Tile)selected[selected.Count - 1];
+            if (draw_hover.Count > 0 && draw_hover[draw_hover.Count - 1] == destination.position)
             {
-                if (draw[draw.Count-1] == ((Tile)selected[1]).position)
+                if (draw_selected.Contains(destination.position))
                 {
-                    for (int i = 0; i < draw.Count; i++)
+                    draw_selected.AddRange(draw_hover);
+                    draw_hover.Clear();
+                    try
                     {
-                        Map.map[draw[i]].SetTerrain();
-                        Map.map[draw[i]].UnHover();
+                        Plate.CreatePlate(new List<Position>(draw_selected));
                     }
+                    catch(Exception e)
+                    {
+                        Plate.CreatePlate(new List<Position>(draw_selected));
+                        throw e;
+                    }
+                    Clear();
                 }
                 else
                 {
-                    Debug.Log(draw[draw.Count - 1] + ", " + ((Tile)selected[1]).position);
+                    for (int i = 0; i < draw_hover.Count; i++)
+                    {
+                        Map.map[draw_hover[i]].UnHover();
+                        Map.map[draw_hover[i]].OnSelect();
+                    }
+                    draw_selected.AddRange(draw_hover);
+                    draw_hover.Clear();
                 }
             }
-            Clear();
+            else
+            {
+                selected[selected.Count - 1].UnSelect();
+                selected[selected.Count - 1].UnHover();
+                selected.RemoveAt(selected.Count - 1);
+            }
         }
-
     }
 
     public override void OnHover()
     {
-        if (selected.Count == 1)
+        if (selected.Count > 0)
         {
-            if (selected[0] is Tile && hover is Tile)
+            if (selected[selected.Count-1] is Tile && hover is Tile)
             {
-                Tile start = (Tile) selected[0];
+                Tile start = (Tile) selected[selected.Count - 1];
                 Tile destination = (Tile)hover;
-                List<Position> draw_copy = new List<Position>(draw);
+                List<Position> draw_copy = new List<Position>(draw_hover);
                 PlateDrawContoller.EndFindPath();
-                for (int i = 1; i < draw.Count; i++)
-                {
-                    Map.map[draw[i]].UnHover();
-                }
+                ClearHover();
                 PlateDrawContoller.ScheduleFindPath(start, destination);
             }
         }
+    }
+
+    public static void ClearHover()
+    {
+        for (int i = 1; i < draw_hover.Count; i++)
+        {
+            Map.map[draw_hover[i]].UnHover();
+        }
+        draw_hover.Clear();
+    }
+
+    public override void Clear()
+    {
+        for (int i = 0; i < draw_selected.Count; i++)
+        {
+            Map.map[draw_selected[i]].UnSelect();
+            Map.map[draw_selected[i]].UnHover();
+        }
+        draw_selected.Clear();
+        base.Clear();
     }
 
     public void Initialise()
     {
         Mode.current_menu = this;
         selected = new List<Clickable>();
-        draw = new List<Position>();
+        draw_hover = new List<Position>();
+        draw_selected = new List<Position>();
+    }
+
+    public override void OnModeEnter()
+    {
+        
+    }
+
+    public override void OnModeExit()
+    {
+        
     }
 }

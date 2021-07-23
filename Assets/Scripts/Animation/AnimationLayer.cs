@@ -20,6 +20,7 @@ public class AnimationLayer
 	int nextAnimation;
 	int currentFrame;
 	int currentTime;
+    int setAnimation;
 	bool m_pause;
     bool m_visible;
     float m_timeOffset;
@@ -49,14 +50,7 @@ public class AnimationLayer
     {
         m_visible = givenVisible;
         currentFrame = 0;
-        if (m_visible)
-        {
-            SetTexture(m_animationList[currentSpriteMap].GetAnimation(currentAnimation).GetSprite(currentFrame));
-        }
-        else
-        {
-            SetTexture(null);
-        }
+        m_renderer.enabled = givenVisible;
     }
     public bool GetVisible() { return m_visible; }
 	public int GetAnimationFrame() 	
@@ -103,7 +97,7 @@ public class AnimationLayer
 		currentAnimation = givenAnimation; 
 		nextAnimation = m_animationList[currentSpriteMap].GetBaseAnimationAsInt();
 		currentFrame = givenFrame;
-	}
+    }
 	public void ChangeAnimation()
 	{
 		currentAnimation = nextAnimation;
@@ -128,6 +122,8 @@ public class AnimationLayer
         AddSpriteMap(startingSpriteMap, givenColour);
         currentSpriteMap = startingSpriteMap;
         nextAnimation = m_animationList[startingSpriteMap].GetBaseAnimationAsInt();
+        SetTexture(m_animationList[currentSpriteMap].GetAnimation(currentAnimation).GetSprite(currentFrame));
+        setAnimation = -1;
     }
 
     public void Animate()
@@ -146,13 +142,18 @@ public class AnimationLayer
                     }
                     currentTime = 0;
                 }
+                if (GetAnimation() < 0)
+                {
+                    throw new AnimationOutofBoundsException("The animation isn't set for " + GetName());
+                }
+                SetTexture(m_animationList[currentSpriteMap].GetAnimation(currentAnimation).GetSprite(currentFrame));
+                setAnimation = currentAnimation;
                 currentTime++;
             }
-            if (GetAnimation() < 0 )
-            {
-                throw new AnimationOutofBoundsException("The animation isn't set for " + GetName());
+            else if(setAnimation != currentAnimation) {
+                SetTexture(m_animationList[currentSpriteMap].GetAnimation(currentAnimation).GetSprite(currentFrame));
+                setAnimation = currentAnimation;
             }
-            SetTexture(m_animationList[currentSpriteMap].GetAnimation(currentAnimation).GetSprite(currentFrame));
         }
     }
 

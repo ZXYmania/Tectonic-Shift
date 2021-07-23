@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+[Serializable]
 public struct Position
 {
     public int x;
@@ -20,13 +21,22 @@ public struct Position
     }
     public override int GetHashCode()
     {
-        int index = (x+ "0" +y).GetHashCode();
-        return index;
+        return (x + "0" + y).GetHashCode();
     }
 
     public static bool operator ==(Position c1, Position c2)
     {
         return c1.Equals(c2);
+    }
+
+    public static Position operator +(Position c1, Position c2)
+    {
+        return new Position(c1.x + c2.x, c1.y + c2.y);
+    }
+
+    public static Position operator -(Position c1, Position c2)
+    {
+        return new Position(c1.x - c2.x, c1.y - c2.y);
     }
 
     public static bool operator !=(Position c1, Position c2) => !c1.Equals(c2);
@@ -49,6 +59,7 @@ public struct Position
         return "(" + x + "," + y + ")";
     }
 }
+[Serializable]
 public class Tile : Animated, Clickable
 {
     public static Tile CreateTile(int x, int y)
@@ -64,10 +75,12 @@ public class Tile : Animated, Clickable
     public Position position { get; protected set; }
     public bool selected;
     public bool hovered;
+    public int terrain { get; protected set; }
     public bool edge;
     protected override void Initialise()
     {
         base.Initialise();
+        terrain = 0;
         AddAnimationLayer("plate", "plates", Color.black, true);
         AddAnimationLayer("border", "plates", Color.red, true);
         m_animationLayer["border"].SetVisible(false);
@@ -75,6 +88,7 @@ public class Tile : Animated, Clickable
         selected = false;
         hovered = false;
         edge = false;
+        m_animationLayer["plate"].ChangeAnimation(0);
     }
 
     void Start()
@@ -85,20 +99,21 @@ public class Tile : Animated, Clickable
     // Update is called once per frame
     void Update()
     {
-
+        if (terrain != m_animationLayer["plate"].GetAnimation())
+        {
+            m_animationLayer["plate"].ChangeAnimation(terrain);
+        }
         if ((selected || hovered) != m_animationLayer["border"].GetVisible())
         {
             m_animationLayer["border"].SetVisible(selected||hovered);
         }
         Animate();
+
     }
 
     void OnMouseDown()
     {
-        if (!selected)
-        {
-            Mode.Select(this);
-        }
+       Mode.Select(this);
     }
 
     void OnMouseOver()
@@ -109,10 +124,7 @@ public class Tile : Animated, Clickable
 
     void OnMouseExit()
     {
-        if(!selected)
-        {
-            UnHover();
-        }
+        UnHover();
     }
 
     public override string ToString()
@@ -141,10 +153,9 @@ public class Tile : Animated, Clickable
         selected = false;
     }
 
-    public void SetTerrain()
+    public void SetTerrain(int terrain)
     {
-        m_animationLayer["plate"].ChangeAnimation(1);
-        m_animationLayer["border"].ChangeAnimation(1);
         edge = true;
+        this.terrain = terrain;
     }
 }

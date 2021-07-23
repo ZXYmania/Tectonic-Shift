@@ -1,7 +1,6 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Diagnostics;
 using Unity.Jobs;
 using UnityEngine;
 
@@ -14,20 +13,65 @@ public class Map
 
         }
     }
+
+    public class MapBuilder : MonoBehaviour
+    {
+        public Position upto;
+        private void Start()
+        {
+            upto = new Position(0, 0);
+        }
+        void Update()
+        {
+            int count = 0;
+            int rate_limit = 50;
+            if (upto.y >= Map.size.y)
+            {
+                upto.x++;
+                upto.y = 0;
+            }
+            if (!Map.map.ContainsKey(new Position(size.x -1, size.y -1)))
+            {
+                for (int i = upto.x; i < Map.size.x; i++)
+                {
+
+                    for (int j = upto.y; j < Map.size.y; j++)
+                    {
+                        upto.y = 0;
+                        Tile curr_tile = Tile.CreateTile(i, j);
+                        Map.map.Add(curr_tile.position, curr_tile);
+                        if( count++ > rate_limit)
+                        {
+                            upto = new Position(i, j+1);
+                            i = Map.size.x+1;
+                            j = Map.size.y+1;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                Destroy(this.gameObject);
+            }
+        }
+
+    }
     public static Dictionary<Position, Tile> map { get; protected set; }
+
     public struct AStarData
     {
         public Position previous_tile;
         public float distance;
         public float waste;
         public bool ventured;
-
+        public float search_criteria;
         public AStarData(Position tile, float distance, float waste)
         {
             this.previous_tile = tile;
             this.distance = distance;
             this.waste = waste;
             this.ventured = false;
+            search_criteria = this.waste * size.x + this.distance;
         }
         public AStarData(Position tile, float distance, float waste, bool ventured)
         {
@@ -35,6 +79,7 @@ public class Map
             this.distance = distance;
             this.waste = waste;
             this.ventured = ventured;
+            search_criteria = this.waste * size.x + this.distance;
         }
         public AStarData(AStarData data, bool ventured)
         {
@@ -42,28 +87,30 @@ public class Map
             this.distance = data.distance;
             this.waste = data.waste;
             this.ventured = ventured;
+            search_criteria = this.waste * size.x + this.distance;
         }
+
     }
 
-    public static Position size { get; protected set; } = new Position(150, 75);
-    
+    public static Position size { get; protected set; } = new Position(250, 125);
+    public static int scale { get; protected set; }
+
     public static void Initialise()
     {
+        scale = Mathf.CeilToInt(40000 / size.x);
+        Debug.Log(scale);
         if(map is null)
         {
             map = new Dictionary<Position, Tile>();
         }
+        CreateMap();
     }
-    public static void AddColumn(int rowX)
+
+    protected static void CreateMap()
     {
-        for (int j = 0; j < size.y; j++)
-        {
-            Tile curr_tile = Tile.CreateTile(rowX, j);
-            Map.map.Add(curr_tile.position, curr_tile);
-        }
+        GameObject gameObject = new GameObject();
+        gameObject.AddComponent<MapBuilder>();
     }
-
-
 
     public static Position GetAdjacent(Position tile, int i, int j)
     {
@@ -80,22 +127,25 @@ public class Map
         return new Position(return_x, return_y);
     }
 
-    public static Position GetDirection(Position start, Position destination)
+    public static bool IsAdjacent(Position from, Position to)
     {
-        Position goal_direction = new Position(destination.x - start.x, destination.y - start.y);
-        if (Mathf.Abs(goal_direction.x) > size.x/2 )
+        int x = from.x - to.x;
+        if((to.x == 0 && from.x == size.x) || (to.x == size.x && from.x == 0))
         {
-            goal_direction.x = goal_direction.x * -1;
+            x = 1;
         }
-        if (goal_direction.x != 0)
+        Position dif = new Position(x*x, (to.y - from.y) * (to.y-from.y));
+        return dif.x < 2 && dif.y < 2;
+    }
+
+    public static Position GetDirection(Position from, Position to)
+    {
+        Position result = new Position((to.x - from.x).CompareTo(0), (to.y - from.y).CompareTo(0));
+        if (Mathf.Abs(to.x-from.x) > size.x - Mathf.Abs(to.x - from.x))
         {
-            goal_direction.x = goal_direction.x / Mathf.Abs(goal_direction.x);
+            result.x = result.x * -1;
         }
-        if (goal_direction.y != 0)
-        {
-            goal_direction.y = goal_direction.y / Mathf.Abs(goal_direction.y);
-        }
-        return goal_direction;
+        return result;
     }
     public static List<Position> DrawLine(Tile start, Tile destination, DrawContoller draw_option)
     {
@@ -108,9 +158,6 @@ public class Map
 
     public static List<Position> DrawLine(Position start, Position destination, DrawContoller draw_option)
     {
-        Stopwatch timer = new Stopwatch();
-        timer.Reset();
-        timer.Start();
         if(start == destination)
         {
             return new List<Position>() { start };
@@ -125,9 +172,10 @@ public class Map
         List<Position> result = new List<Position>();
         Position current_tile = start;
         bool path_found = false;
-        while (quick_search.Count + medium_search.Count + slow_search.Count > 0  && !path_found && !draw_option.QuickStop())
+        while (!path_found && !draw_option.QuickStop() && (quick_search.Count > 0 || medium_search.Count > 0 || slow_search.Count > 0 ))
         {
-            data_map[current_tile] = new AStarData(data_map[current_tile], true);
+            AStarData current_data = new AStarData(data_map[current_tile], true);
+            data_map[current_tile] = current_data;
             Position goal_direction = GetDirection(current_tile, destination);
             for (int i = -1; i <= 1; i++)
             {
@@ -140,8 +188,8 @@ public class Map
                         {
                             if (draw_option.GetDistance(current_tile, adjacent_tile) > 0)
                             {
-                                float distance = data_map[current_tile].distance + draw_option.GetDistance(current_tile, adjacent_tile);
-                                float waste = data_map[current_tile].waste;
+                                float distance = current_data.distance + draw_option.GetDistance(current_tile, adjacent_tile);
+                                float waste = current_data.waste;
                                 data_map.Add(adjacent_tile, new AStarData(current_tile, distance, waste));
                                 path_found = true;
                             }
@@ -149,54 +197,79 @@ public class Map
                         else
                         {
                             float distance = draw_option.GetDistance(current_tile, adjacent_tile);
-                            if (distance > 0)
+                            if (distance > 0 && Mathf.Abs(goal_direction.x + i) + Mathf.Abs(goal_direction.y + j) != 0)
                             {
-                                distance += data_map[current_tile].distance;
-                                float waste = data_map[current_tile].waste + Mathf.Abs(goal_direction.x - i) + Mathf.Abs(goal_direction.y - j);
+                                distance += current_data.distance;
+                                float waste = current_data.waste + (goal_direction.x - i ) * (goal_direction.x - i ) + (goal_direction.y - j ) * (goal_direction.y - j ) ;
                                 if (!data_map.ContainsKey(adjacent_tile))
                                 {
                                     data_map.Add(adjacent_tile, new AStarData(current_tile, distance, waste));
                                 }
                                 else
                                 {
-                                    if (data_map[adjacent_tile].distance > distance)
+                                    if (data_map[adjacent_tile].distance > distance || data_map[adjacent_tile].waste > waste)
                                     {
                                         data_map[adjacent_tile] = new AStarData(current_tile, distance, waste, data_map[adjacent_tile].ventured);
-                                    }
-                                }
-                                if (!data_map[adjacent_tile].ventured)
-                                {
-                                    if (waste == data_map[current_tile].waste)
-                                    {
-                                        if (!quick_search.Contains(adjacent_tile))
+                                        if (quick_search.Contains(adjacent_tile))
                                         {
-                                            quick_search.Add(adjacent_tile);
+                                            quick_search.Remove(adjacent_tile);
                                         }
-                                        if (medium_search.Contains(adjacent_tile))
+                                        else if (medium_search.Contains(adjacent_tile))
                                         {
                                             medium_search.Remove(adjacent_tile);
+
                                         }
                                         else if (slow_search.Contains(adjacent_tile))
                                         {
                                             slow_search.Remove(adjacent_tile);
                                         }
                                     }
-                                    else if (waste - data_map[current_tile].waste < 2)
+                                }
+                                if (!data_map[adjacent_tile].ventured 
+                                    && ! quick_search.Contains(adjacent_tile)
+                                    && ! medium_search.Contains(adjacent_tile)
+                                    && ! slow_search.Contains(adjacent_tile))
+                                {
+                                     if (waste - current_data.waste < 0.5 )
                                     {
-                                        if (!medium_search.Contains(adjacent_tile))
+                                        //Add item into sorted quick_search
+
+                                        int index = quick_search.FindLastIndex((tile) => data_map[adjacent_tile].search_criteria > data_map[tile].search_criteria);
+                                        if (index == 0 || index == -1)
                                         {
-                                            medium_search.Add(adjacent_tile);
+                                            quick_search.Insert(0, adjacent_tile);
                                         }
-                                        if (slow_search.Contains(adjacent_tile))
+                                        else
                                         {
-                                            slow_search.Remove(adjacent_tile);
+                                            quick_search.Insert(index + 1, adjacent_tile) ;
+
                                         }
                                     }
-                                    else
+                                    else if (waste - current_data.waste <= 2)
                                     {
-                                        if (!slow_search.Contains(adjacent_tile))
+                                        //Add item into sorted medium_search
+
+                                        int index = medium_search.FindLastIndex((tile) => data_map[adjacent_tile].search_criteria > data_map[tile].search_criteria);
+                                        if (index == 0 || index == -1)
                                         {
-                                            slow_search.Add(adjacent_tile);
+                                            medium_search.Insert(0, adjacent_tile);
+                                        }
+                                        else
+                                        {
+                                            medium_search.Insert(index+1, adjacent_tile);
+                                        }
+                                    }
+                                    else if (waste - current_data.waste <= 5)
+                                    {
+                                        //Add item into sorted slow_search
+                                        int index = slow_search.FindLastIndex((tile) => data_map[adjacent_tile].search_criteria > data_map[tile].search_criteria);
+                                        if (index == 0 || index == -1)
+                                        {
+                                            slow_search.Insert(0, adjacent_tile);
+                                        }
+                                        else
+                                        {
+                                            slow_search.Insert(index + 1, adjacent_tile);
                                         }
                                     }
                                 }
@@ -207,21 +280,16 @@ public class Map
             }
             if (quick_search.Count > 0)
             {
-                //Sort Quick Search
-                quick_search.Sort((tile1, tile2) => data_map[tile1].waste.CompareTo(data_map[tile2].waste));
                 current_tile = quick_search[0];
                 quick_search.Remove(current_tile);
             }
             else if (medium_search.Count > 0)
             {
-                //Sort medium_search
-                medium_search.Sort((tile1, tile2) => data_map[tile1].waste.CompareTo(data_map[tile2].waste));
                 current_tile = medium_search[0];
                 medium_search.Remove(current_tile);
             }
             else if (slow_search.Count > 0)
             {
-                slow_search.Sort((tile1, tile2) => data_map[tile1].waste.CompareTo(data_map[tile2].waste));
                 current_tile = slow_search[0];
                 slow_search.Remove(current_tile);
             }
