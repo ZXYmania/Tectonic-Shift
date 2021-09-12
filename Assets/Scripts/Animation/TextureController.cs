@@ -20,12 +20,22 @@ public class MalformedTextureException : System.Exception
 
 public static class TextureController 
 {
+    public static Material default_material;
     public static Color transparent = new Color(0, 0, 0, 0);
 	private static Dictionary<string, SpriteMap> layerList;
 	public static string[] folderPath;
 	
 	public static void Initialise()
 	{
+        //Fix tearing
+        //Requires a default material to be built that has pixel snap turned on
+
+        default_material = Resources.Load<Material>("default");
+        if(default_material == null)
+        {
+            Debug.Log("To fix tearing add a material in resources called default with a shader of Sprites/Default and pixel snap turned on");
+        }
+        // Load Sprite
         layerList = new Dictionary<string, SpriteMap>();
 		LoadSpriteMaps();
 	}
@@ -34,17 +44,17 @@ public static class TextureController
 	{
 		Color currentColour = transparent;		
 		//Get the texture folder
-		string tempPath = @"Texture";
+		string tempPath = "Texture";
 		//Load the sprites found at the path
-		Object[] tempSpriteMap = Resources.LoadAll(tempPath, typeof(Texture2D));
+		Texture2D[] tempSpriteMap = Resources.LoadAll<Texture2D>(tempPath);
 		//For each sprite map
 		for(int i = 0; i < tempSpriteMap.Length; i++)
 		{
-			//Convert the found sprite to sprite
-			Texture2D currSprite = tempSpriteMap[i] as Texture2D;
-            if(currSprite.isReadable)
+			//Fix border affecting image
+            tempSpriteMap[i].filterMode = FilterMode.Point;
+            if(tempSpriteMap[i].isReadable)
             {
-                SetAnimations(currSprite);
+                SetAnimations(tempSpriteMap[i]);
             }
             else
             {

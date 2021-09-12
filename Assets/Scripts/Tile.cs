@@ -19,6 +19,13 @@ public struct Position
     {
         return new Vector2(x, y);
     }
+
+    public void ConvertToDirection()
+    {
+        x = x.CompareTo(0);
+        y = y.CompareTo(0);
+    }
+
     public override int GetHashCode()
     {
         return (x + "0" + y).GetHashCode();
@@ -75,20 +82,25 @@ public class Tile : Animated, Clickable
     public Position position { get; protected set; }
     public bool selected;
     public bool hovered;
-    public int terrain { get; protected set; }
-    public bool edge;
+    protected PlateProperty plate;
+    public string GetContinent()
+    {
+        return plate.plate_name;
+    }
+
+    public int GetCraton()
+    {
+        return plate.craton;
+    }
+
     protected override void Initialise()
     {
         base.Initialise();
-        terrain = 0;
         AddAnimationLayer("plate", "plates", Color.black, true);
-        AddAnimationLayer("border", "plates", Color.red, true);
-        m_animationLayer["border"].SetVisible(false);
+        AddAnimationLayer("border", "plates", Color.red, true, false);
         SetTransform(position.x, position.y);
         selected = false;
         hovered = false;
-        edge = false;
-        m_animationLayer["plate"].ChangeAnimation(0);
     }
 
     void Start()
@@ -99,16 +111,7 @@ public class Tile : Animated, Clickable
     // Update is called once per frame
     void Update()
     {
-        if (terrain != m_animationLayer["plate"].GetAnimation())
-        {
-            m_animationLayer["plate"].ChangeAnimation(terrain);
-        }
-        if ((selected || hovered) != m_animationLayer["border"].GetVisible())
-        {
-            m_animationLayer["border"].SetVisible(selected||hovered);
-        }
         Animate();
-
     }
 
     void OnMouseDown()
@@ -137,25 +140,30 @@ public class Tile : Animated, Clickable
     public void OnHover()
     {
         hovered = true;
+        m_animationLayer["border"].SetVisible(selected || hovered);
     }
 
     public void UnHover()
     {
         hovered = false;
+        m_animationLayer["border"].SetVisible(selected || hovered);
+
     }
     public void OnSelect()
     {
         selected = true;
+        m_animationLayer["border"].SetVisible(selected || hovered);
     }
 
     public void UnSelect()
     {
         selected = false;
+        m_animationLayer["border"].SetVisible(selected || hovered);
     }
 
-    public void SetTerrain(int terrain)
+    public void SetPlate(PlateProperty plate)
     {
-        edge = true;
-        this.terrain = terrain;
+        this.plate = plate; 
+        m_animationLayer["plate"].ChangeAnimation(plate.craton);
     }
 }

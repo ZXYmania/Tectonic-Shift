@@ -5,15 +5,6 @@ using System.Collections.Generic;
 public class SpriteMap 
 {
 	List<PlayAnimation> m_animationList;
-    private string m_base;
-    public string GetBase()
-    {
-        if(m_base == null)
-        {
-            return m_name;
-        }
-        return m_base;
-    }
 	public string m_name { get; protected set; }
 	public Color m_borderColour { get; protected set; }
     public string m_index { get; protected set; }

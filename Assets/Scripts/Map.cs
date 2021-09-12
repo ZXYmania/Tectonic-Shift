@@ -58,6 +58,7 @@ public class Map
     }
     public static Dictionary<Position, Tile> map { get; protected set; }
 
+
     public struct AStarData
     {
         public Position previous_tile;
@@ -89,10 +90,27 @@ public class Map
             this.ventured = ventured;
             search_criteria = this.waste * size.x + this.distance;
         }
+        public class WasteComparer : IComparer<Position>
+        {
+            Dictionary<Position, AStarData> data_map;
+            public WasteComparer(Dictionary<Position, AStarData> data_map)
+            {
+                this.data_map = data_map;
+            }
+            public int Compare(Position x, Position y)
+            {
+                int waste = data_map[x].waste.CompareTo(data_map[y].waste);
+                if ( waste == 0)
+                {
+                    return x.GetHashCode().CompareTo(y.GetHashCode());
+                }
+                return waste;
+            }
+        }
 
     }
 
-    public static Position size { get; protected set; } = new Position(250, 125);
+    public static Position size { get; protected set; } = new Position(125, 75);
     public static int scale { get; protected set; }
 
     public static void Initialise()
@@ -158,21 +176,24 @@ public class Map
 
     public static List<Position> DrawLine(Position start, Position destination, DrawContoller draw_option)
     {
-        if(start == destination)
+        if (start == destination)
         {
             return new List<Position>() { start };
         }
         Dictionary<Position, AStarData> data_map = new Dictionary<Position, AStarData>();
-        List<Position> quick_search = new List<Position>();
-        List<Position> medium_search = new List<Position>();
-        List<Position> slow_search = new List<Position>();
+        AStarData.WasteComparer waste_comparer = new AStarData.WasteComparer(data_map);
+        SortedSet<Position> quick_search = new SortedSet<Position>(waste_comparer);
+        SortedSet<Position> medium_search = new SortedSet<Position>(waste_comparer);
+        SortedSet<Position> slow_search = new SortedSet<Position>(waste_comparer);
+        SortedSet<Position> backwards_search = new SortedSet<Position>(waste_comparer);
+
         // first position is tile, second position is x = distance travelled and y = waste
         quick_search.Add(start);
         data_map.Add(start, new AStarData(new Position(-1, -1), 0, 0));
         List<Position> result = new List<Position>();
         Position current_tile = start;
         bool path_found = false;
-        while (!path_found && !draw_option.QuickStop() && (quick_search.Count > 0 || medium_search.Count > 0 || slow_search.Count > 0 ))
+        while (!path_found && !draw_option.QuickStop() && (quick_search.Count + medium_search.Count + slow_search.Count > 0 ) )
         {
             AStarData current_data = new AStarData(data_map[current_tile], true);
             data_map[current_tile] = current_data;
@@ -194,84 +215,34 @@ public class Map
                                 path_found = true;
                             }
                         }
+                        else if(data_map.ContainsKey(adjacent_tile))
+                        {
+                            float distance = draw_option.GetDistance(current_tile, adjacent_tile);
+                            distance += current_data.distance;
+                            if (distance < data_map[adjacent_tile].distance)
+                            {
+                                data_map[adjacent_tile] = new AStarData(current_tile, distance, data_map[adjacent_tile].waste);
+                            }
+                        }
                         else
                         {
                             float distance = draw_option.GetDistance(current_tile, adjacent_tile);
-                            if (distance > 0 && Mathf.Abs(goal_direction.x + i) + Mathf.Abs(goal_direction.y + j) != 0)
+                            if (distance > 0)
                             {
-                                distance += current_data.distance;
-                                float waste = current_data.waste + (goal_direction.x - i ) * (goal_direction.x - i ) + (goal_direction.y - j ) * (goal_direction.y - j ) ;
-                                if (!data_map.ContainsKey(adjacent_tile))
+                                float waste = (goal_direction.x - i) * (goal_direction.x - i) + (goal_direction.y - j) * (goal_direction.y - j);
+                                data_map.Add(adjacent_tile, new AStarData(current_tile, distance + current_data.distance, current_data.waste + waste));
+                                
+                                if (waste  < 0.5)
                                 {
-                                    data_map.Add(adjacent_tile, new AStarData(current_tile, distance, waste));
+                                    quick_search.Add(adjacent_tile);
+                                }
+                                else if (waste <= 2)
+                                {
+                                    medium_search.Add(adjacent_tile);
                                 }
                                 else
                                 {
-                                    if (data_map[adjacent_tile].distance > distance || data_map[adjacent_tile].waste > waste)
-                                    {
-                                        data_map[adjacent_tile] = new AStarData(current_tile, distance, waste, data_map[adjacent_tile].ventured);
-                                        if (quick_search.Contains(adjacent_tile))
-                                        {
-                                            quick_search.Remove(adjacent_tile);
-                                        }
-                                        else if (medium_search.Contains(adjacent_tile))
-                                        {
-                                            medium_search.Remove(adjacent_tile);
-
-                                        }
-                                        else if (slow_search.Contains(adjacent_tile))
-                                        {
-                                            slow_search.Remove(adjacent_tile);
-                                        }
-                                    }
-                                }
-                                if (!data_map[adjacent_tile].ventured 
-                                    && ! quick_search.Contains(adjacent_tile)
-                                    && ! medium_search.Contains(adjacent_tile)
-                                    && ! slow_search.Contains(adjacent_tile))
-                                {
-                                     if (waste - current_data.waste < 0.5 )
-                                    {
-                                        //Add item into sorted quick_search
-
-                                        int index = quick_search.FindLastIndex((tile) => data_map[adjacent_tile].search_criteria > data_map[tile].search_criteria);
-                                        if (index == 0 || index == -1)
-                                        {
-                                            quick_search.Insert(0, adjacent_tile);
-                                        }
-                                        else
-                                        {
-                                            quick_search.Insert(index + 1, adjacent_tile) ;
-
-                                        }
-                                    }
-                                    else if (waste - current_data.waste <= 2)
-                                    {
-                                        //Add item into sorted medium_search
-
-                                        int index = medium_search.FindLastIndex((tile) => data_map[adjacent_tile].search_criteria > data_map[tile].search_criteria);
-                                        if (index == 0 || index == -1)
-                                        {
-                                            medium_search.Insert(0, adjacent_tile);
-                                        }
-                                        else
-                                        {
-                                            medium_search.Insert(index+1, adjacent_tile);
-                                        }
-                                    }
-                                    else if (waste - current_data.waste <= 5)
-                                    {
-                                        //Add item into sorted slow_search
-                                        int index = slow_search.FindLastIndex((tile) => data_map[adjacent_tile].search_criteria > data_map[tile].search_criteria);
-                                        if (index == 0 || index == -1)
-                                        {
-                                            slow_search.Insert(0, adjacent_tile);
-                                        }
-                                        else
-                                        {
-                                            slow_search.Insert(index + 1, adjacent_tile);
-                                        }
-                                    }
+                                    slow_search.Add(adjacent_tile);
                                 }
                             }
                         }
@@ -280,17 +251,17 @@ public class Map
             }
             if (quick_search.Count > 0)
             {
-                current_tile = quick_search[0];
+                current_tile = quick_search.Min;
                 quick_search.Remove(current_tile);
             }
             else if (medium_search.Count > 0)
             {
-                current_tile = medium_search[0];
+                current_tile = medium_search.Min;
                 medium_search.Remove(current_tile);
             }
             else if (slow_search.Count > 0)
             {
-                current_tile = slow_search[0];
+                current_tile = slow_search.Min;
                 slow_search.Remove(current_tile);
             }
         }
@@ -300,9 +271,8 @@ public class Map
         }
         AStarData item = data_map[destination];
         result.Add(destination);
-        while ( data_map.ContainsKey(item.previous_tile))
+        while (data_map.ContainsKey(item.previous_tile) && result[result.Count -1] != item.previous_tile)
         {
-
             result.Add(item.previous_tile);
             item = data_map[item.previous_tile];
         }

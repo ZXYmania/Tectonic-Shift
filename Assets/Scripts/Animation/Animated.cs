@@ -4,6 +4,11 @@ using System.Collections.Generic;
 
 public abstract class Animated : MonoBehaviour
 {
+    public enum AnimationLayerType
+    {
+        sprite,
+        image
+    }
 
     protected string animationName;
     protected float m_animationTimer;
@@ -34,25 +39,22 @@ public abstract class Animated : MonoBehaviour
     {
         if (HasTicked())
         {
-            foreach (KeyValuePair<string,AnimationLayer> item in m_animationLayer)
+            foreach (KeyValuePair<string, AnimationLayer> item in m_animationLayer)
             {
-                    if(item.Value.GetVisible())
-                    {
-                        item.Value.Animate();
-                    }
+                item.Value.Animate();
             }
         }
         m_animationTimer += Time.deltaTime;
         return true;
     }
 
-    protected void AddAnimationLayer(string givenName ,string givenAnimation, Color givenColour, bool isPaused, int givenAnimationVariant = 0)
+    protected void AddAnimationLayer(string givenName ,string givenAnimation, Color givenColour, bool isPaused, bool givenVisible = true, AnimationLayerType givenType = AnimationLayerType.sprite)
     {
         if (!m_animationLayer.ContainsKey(givenName))
         {
-            AnimationLayer currentAnimation = new AnimationLayer();
+            AnimationLayer currentAnimation = CreateAnimationLayer(givenType);
+            
             GameObject currentObject = gameObject;
-            SpriteRenderer currentRenderer = gameObject.GetComponent<SpriteRenderer>();
             if (m_animationLayer.Count > 0)
             {
                 currentObject = new GameObject();
@@ -60,22 +62,31 @@ public abstract class Animated : MonoBehaviour
                 currentObject.transform.position = new Vector3(transform.position.x, transform.position.y, -1);
                 currentObject.transform.localScale = new Vector3(1, 1, 1);
                 currentObject.name = givenName;
-                currentRenderer = null;
             }
             else
             {
                 currentObject.name = gameObject.name + " " + givenName;
-            }
-            if(currentRenderer == null)
-            {
-                currentRenderer = currentObject.AddComponent<SpriteRenderer>();
-            }             
-            currentAnimation.Initialise(currentRenderer, givenName, givenAnimation, givenColour, givenAnimationVariant, isPaused);
+            }           
+            currentAnimation.Initialise(currentObject, givenName, givenAnimation, givenColour, isPaused, givenVisible);
             m_animationLayer.Add(givenName, currentAnimation);
         }
         else
         {
             m_animationLayer[givenName].AddSpriteMap(givenAnimation, givenColour);
+        }
+    }
+
+    private AnimationLayer CreateAnimationLayer(AnimationLayerType givenType)
+    {
+        switch(givenType)
+        {
+            case AnimationLayerType.image:
+                return new ImageAnimationLayer();
+            case AnimationLayerType.sprite:
+                return new SpriteLayer();
+            default:
+                throw new System.NotImplementedException();
+
         }
     }
 

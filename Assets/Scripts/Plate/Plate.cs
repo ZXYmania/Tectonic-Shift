@@ -13,28 +13,69 @@ public class InvalidContinentShape : System.Exception
 }
 
 [Serializable]
-public class Plate
+public struct PlateProperty
 {
-    public static List<Plate> plate = new List<Plate>();
+    public int craton;
+    public string plate_name;
+    public PlateProperty(int craton, string name)
+    {
+        this.craton = craton;
+        this.plate_name = name;
+    }
+}
+
+[Serializable]
+public class Plate : Clickable
+{
+    public static Dictionary<String, Plate> plate = new Dictionary<String, Plate>();
     public HashSet<Position> border;
+    string name;
     [Serializable]
     public class Edge
     {
         public List<Position> tile;
         public Position facing;
-        int plate_index;
-        public HashSet<Position> corner;
-        public Edge(List<Position> tile, int plate_index)
+        public string plate_name;
+        public Edge(List<Position> tile, string plate_name)
         {
-            this.plate_index = plate_index;
+            this.plate_name = plate_name;
             this.tile = new List<Position>(tile);
-            corner = new HashSet<Position>() { this.tile[0], this.tile[this.tile.Count - 1] };
         }
-
 
         public Position GetDirection()
         {
             return Map.GetDirection(tile[1], tile[0]);
+        }
+        public void SetOutside()
+        {
+            int halfway = Mathf.FloorToInt(tile.Count / 2);
+            Position outside = GetDirection();
+            outside = new Position(outside.y, outside.x * -1);
+            if (plate[plate_name].IsInside(tile[halfway] + outside))
+            {
+                outside = new Position(outside.x * -1, outside.y * -1);
+                if (plate[plate_name].IsInside(tile[halfway] + outside))
+                {
+                    facing = new Position(0, 0);
+                }
+            }
+            facing = outside;
+        }
+
+        public bool Validate()
+        {
+            Plate parent = plate[plate_name];
+            int i = 1;
+            for(; i < tile.Count-1; i++)
+            {
+                if(parent.IsInside(tile[i]+facing))
+                {
+                    Debug.Log(tile[i]+ " " + facing + " edge is not valid");
+                    Map.map[tile[i] + facing].SetPlate(new PlateProperty(2, plate_name));
+                    return false;
+                }
+            }
+            return i > 1 ||  !parent.IsInside(tile[0]+facing);
         }
     }
     public List<Edge> edge { get; protected set; }
@@ -42,7 +83,8 @@ public class Plate
     {
         try
         {
-            plate.Add(this);
+            this.name = GetName();
+            plate.Add(name, this);
             this.edge = new List<Edge>();
             List<Position> perimeter = new List<Position>(given_tiles);
             int trim = perimeter.FindIndex((tile) => tile == perimeter[perimeter.Count - 1]);
@@ -56,11 +98,10 @@ public class Plate
         }
         catch(Exception e)
         {
-            Debug.Log(e);
+            Debug.Log(name + " " + e);
             throw e;
         }
     }
-
     public static Plate CreatePlate(List<Position> perimeter)
     {
         return new Plate(perimeter);
@@ -68,16 +109,165 @@ public class Plate
 
     public static void CreatePlate(Plate given_plate)
     {
-        plate.Add(given_plate);
+        plate.Add(given_plate.name, given_plate);
         given_plate.FillArea();
     }
+    protected void CreateEdges(List<Position> perimeter)
+    {
+        List<Position> corner = new List<Position>();
+        Position previous_direction = new Position(0, 0);
+        Position previous_corner = new Position(0, 0);
+        List<Position> current_edge = new List<Position>();
+        // start at one to allow inequality comparison
+        int flat = 0;
+        for (int i = 0; i < perimeter.Count; i++)
+        {
+            int previous_index = i - 1;
+            int next_index = i + 1;
+            if (previous_index < 0)
+            {
+                previous_index = perimeter.Count - 1;
+            }
+            if (next_index >= perimeter.Count)
+            {
+                next_index = 0;
+            }
+            if (perimeter[next_index] == perimeter[i])
+            {
+                corner.Remove(perimeter[next_index]);
+                perimeter.RemoveAt(next_index);
+                if (next_index >= perimeter.Count)
+                {
+                    next_index = 0;
+                }
+                else if (next_index == 0)
+                {
+                    i--;
+                    previous_index--;
+                }
+            }
+            Position current_tile = perimeter[i];
+            Position next_direction = Map.GetDirection(perimeter[i], perimeter[next_index]);
+            Position current_direction = Map.GetDirection(perimeter[previous_index], perimeter[i]);
+            // Corner started
+            if (current_direction != next_direction)
+            {
+                corner.Add(perimeter[i]);
+                current_edge.Add(perimeter[i]);
+                if (current_edge.Exists((tile) => tile.x == 0) && current_edge.Exists((tile) => tile.x == Map.size.x - 1))
+                {
+                    flat += Map.GetDirection(current_edge[1], current_edge[0]).x;
+                }
+                previous_direction = new Position(current_direction.x, current_direction.y);
+                edge.Add(new Edge(current_edge, name));
 
+                current_edge.Clear();
+                previous_direction = new Position(next_direction.x, next_direction.y);
+                previous_corner = perimeter[i];
+            }
+            current_edge.Add(perimeter[i]);
+
+        }
+        edge.RemoveAt(0);
+        if (!corner.Contains(perimeter[perimeter.Count - 1]))
+        {
+            current_edge.AddRange(edge[0].tile.GetRange(1, edge[0].tile.Count - 1));
+            edge.RemoveAt(0);
+            edge.Add(new Edge(current_edge, name));
+            if (current_edge.Exists((tile) => tile.x == 0) && current_edge.Exists((tile) => tile.x == Map.size.x - 1))
+            {
+                flat += Map.GetDirection(current_edge[1], current_edge[0]).x;
+            }
+        }
+        current_edge.Clear();
+        int modulo = flat % 2;
+        if (modulo != 0)
+        {
+            if (perimeter[perimeter.Count - 1].y.CompareTo(Mathf.FloorToInt(Map.size.y / 2)) <= 0)
+            {
+                //create edge from 0,0 to  map.size.x, 0
+                for (int i = 0; i < Map.size.x; i++)
+                {
+                    current_edge.Add(new Position(i, 0));
+                }
+            }
+            else
+            {
+                //create edge from 0, map.size.y to  map.size.x, mape.size.y
+                for (int i = 0; i < Map.size.x; i++)
+                {
+                    current_edge.Add(new Position(i, Map.size.y - 1));
+                }
+
+            }
+            edge.Add(new Edge(current_edge, name));
+            border.UnionWith(current_edge);
+        }
+        for (int i = 0; i < edge.Count; i++)
+        {
+            int previous_index = i - 1;
+            if (previous_index < 0)
+            {
+                previous_index = edge.Count-1;
+            }
+            Edge previous_edge = edge[previous_index];
+            edge[i].SetOutside();
+            if (!edge[i].Validate())
+            {
+                Debug.Log(i + " " + edge[i].facing + " " + edge[i].tile[0] + " edge is not valid");
+            }
+        }
+    }
+    protected void FillArea()
+    {
+        for (int i = 0; i < edge.Count; i++)
+        {
+            Edge draw_edge = edge[i];
+            Position direction = edge[i].GetDirection();
+            int previous_index = i - 1;
+            if (previous_index < 0)
+            {
+                previous_index = edge.Count - 1;
+            }
+            Position previous_tile = edge[previous_index].tile[edge[previous_index].tile.Count - 1];
+            for (int j = 0; j < draw_edge.tile.Count; j++)
+            {
+               
+                if (Map.map[draw_edge.tile[j]].GetContinent() == null)
+                {
+                    if(draw_edge.Validate())
+                    {
+                        Map.map[draw_edge.tile[j]].SetPlate(new PlateProperty(3, name));
+                    }
+                    else
+                    {
+                        Map.map[draw_edge.tile[j]].SetPlate(new PlateProperty(1, name));
+
+                    }
+                }
+                if (direction.x != 0)
+                {
+                    Position next_tile = draw_edge.tile[j] + new Position(0, 1);
+                    while (!border.Contains(next_tile) && IsInside(next_tile))
+                    {
+                        Map.map[next_tile].SetPlate(new PlateProperty(0, name));
+                        next_tile.y++;
+                    }
+                }
+
+            }
+        }
+    }
     public bool IsInside(Position selectedtile)
     {
         int below = 0;
         int above = 0;
         List<Tuple<Position, bool>> number_line = new List<Tuple<Position, bool>>();
         Dictionary<Position, int> corner_direction = new Dictionary<Position, int>();
+        if (border.Contains(selectedtile))
+        {
+            return true;
+        }
         for (int i = 0; i < edge.Count; i++)
         {
             List<Position> current_tile = edge[i].tile;
@@ -212,129 +402,56 @@ public class Plate
 
         return inside;
     }
-
     protected bool Contains(Position position)
     {
         return edge.Exists((edge) => edge.tile.Contains(position));
     }
-
-    protected void CreateEdges(List<Position> perimeter)
+    public override string ToString()
     {
-        List<Position> corner = new List<Position>();
-        Position previous_direction = new Position(0, 0);
-        Position previous_corner = new Position(0, 0);
-        List<Position> current_edge = new List<Position>();
-        // start at one to allow inequality comparison
-        int flat = 0;
-        for (int i = 0; i < perimeter.Count; i++)
-        {
-            int previous_index = i - 1;
-            int next_index = i + 1;
-            if (previous_index < 0)
-            {
-                previous_index = perimeter.Count - 1;
-            }
-            if (next_index >= perimeter.Count)
-            {
-                next_index = 0;
-            }
-            if (perimeter[next_index] == perimeter[i])
-            {
-                corner.Remove(perimeter[next_index]);
-                perimeter.RemoveAt(next_index);
-                if (next_index >= perimeter.Count)
-                {
-                    next_index = 0;
-                }
-                else if (next_index == 0)
-                {
-                    i--;
-                    previous_index--;
-                }
-            }
-            Position current_tile = perimeter[i];
-            Position next_direction = Map.GetDirection(perimeter[i], perimeter[next_index]);
-            Position current_direction = Map.GetDirection(perimeter[previous_index], perimeter[i]);
-            // Corner started
-            if (current_direction != next_direction)
-            {
-                corner.Add(perimeter[i]);
-                current_edge.Add(perimeter[i]);
-                if (current_edge.Exists((tile) => tile.x == 0) && current_edge.Exists((tile) => tile.x == Map.size.x - 1))
-                {
-                    flat += Map.GetDirection(current_edge[1], current_edge[0]).x;
-                }
-                previous_direction = new Position(current_direction.x, current_direction.y);
-                edge.Add(new Edge(current_edge, Plate.plate.IndexOf(this)));
-
-                current_edge.Clear();
-                previous_direction = new Position(next_direction.x, next_direction.y);
-                previous_corner = perimeter[i];
-            }
-            current_edge.Add(perimeter[i]);
-
-        }
-        edge.RemoveAt(0);
-        if (!corner.Contains(perimeter[perimeter.Count - 1]))
-        {
-            current_edge.AddRange(edge[0].tile.GetRange(1, edge[0].tile.Count - 1));
-            edge.RemoveAt(0);
-            edge.Add(new Edge(current_edge, Plate.plate.IndexOf(this)));
-            if (current_edge.Exists((tile) => tile.x == 0) && current_edge.Exists((tile) => tile.x == Map.size.x - 1))
-            {
-                flat += Map.GetDirection(current_edge[1], current_edge[0]).x;
-            }
-        }
-        current_edge.Clear();
-        int modulo = flat % 2;
-        if (modulo != 0)
-        {
-            if (perimeter[perimeter.Count - 1].y.CompareTo(Mathf.FloorToInt(Map.size.y / 2)) <= 0)
-            {
-                //create edge from 0,0 to  map.size.x, 0
-                for (int i = 0; i < Map.size.x; i++)
-                {
-                    current_edge.Add(new Position(i, 0));
-                }
-            }
-            else
-            {
-                //create edge from 0, map.size.y to  map.size.x, mape.size.y
-                for (int i = 0; i < Map.size.x; i++)
-                {
-                    current_edge.Add(new Position(i, Map.size.y - 1));
-                }
-
-            }
-            edge.Add(new Edge(current_edge, Plate.plate.IndexOf(this)));
-            border.UnionWith(current_edge);
-        }
+        return "The " + name + " " + base.ToString();
     }
 
-
-    protected void FillArea()
+    public void OnSelect()
     {
-        for (int i = 0; i < edge.Count; i++)
-        {
-            Edge draw_edge = edge[i];
-            Position direction = edge[i].GetDirection();
-            for (int j = 0; j < edge[i].tile.Count; j++)
-            {
-                if (Map.map[draw_edge.tile[j]].terrain == 0)
-                {
-                    Map.map[draw_edge.tile[j]].SetTerrain(3);
-                }
-                if (direction.x != 0)
-                {
-                    Position next_tile = draw_edge.tile[j] + new Position(0, 1);
-                    while (!border.Contains(next_tile) && IsInside(next_tile))
-                    {
-                        Map.map[next_tile].SetTerrain(1);
-                        next_tile.y++;
-                    }
-                }
+        
+    }
 
-            }
-        }
+    public void UnSelect()
+    {
+        
+    }
+
+    public void OnHover()
+    {
+    }
+
+    public void UnHover()
+    {
+    }
+
+    protected static string GetName()
+    {
+        List<string> names = new List<string>() { 
+            "Pangea", 
+            "Rodinia", 
+            "Laurasia", 
+            "Gondwana", 
+            "Amazonia", 
+            "Falkirk", 
+            "Paarsia", 
+            "Ruthenia", 
+            "Zealandia", 
+            "Pannotia", 
+            "Vaalbara", 
+            "Simmeria", 
+            "Kalaharia", 
+            "Baltica", 
+            "Avalonia", 
+            "Atlantica",
+            "Superior",
+            "Scalvia"
+        };
+        Debug.Log(names.Count);
+        return names[plate.Count];
     }
 }

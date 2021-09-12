@@ -4,10 +4,11 @@ using System.Collections.Generic;
 using System.IO;
 using System.Runtime.Serialization.Formatters.Binary;
 using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
 
 public interface Clickable
 {
-    public bool IsSelected();
     public void OnSelect();
     public void UnSelect();
 
@@ -46,8 +47,8 @@ public abstract class Mode : MonoBehaviour
         Map.Initialise();
         m_camera.orthographicSize = Map.size.y / 2;
         m_camera.transform.position = new Vector3(Map.size.x / 2, Map.size.y / 2, -10);
-    }
-
+		Menu.Initialise(m_camera);
+	}
 
 	public void SaveFile<T>(List<T> data)
 	{
@@ -119,10 +120,9 @@ public abstract class Mode : MonoBehaviour
 	}
 	public static void Select(Clickable clicked)
     {
-		if (selected.Count == 0 || selected.IndexOf(clicked) != selected.Count-1 )
+		if (selected.Count == 0 || clicked != selected[selected.Count-1] )
 		{
 			selected.Add(clicked);
-			clicked.OnSelect();
 			current_menu.OnSelect();
 		}
     }

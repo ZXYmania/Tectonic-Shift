@@ -1,6 +1,8 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using Unity.Jobs;
 using UnityEngine;
 
@@ -9,7 +11,7 @@ public class PlateMode : Mode
     public static List<Position> draw_hover;
     public static List<Position> draw_selected;
     protected static bool waiting;
-
+    List<Menu> m_menu;
     void Start()
     {
         if (current_menu == null)
@@ -17,6 +19,12 @@ public class PlateMode : Mode
             SetUp();
         }
         Initialise();
+        m_menu = new List<Menu>();
+        for(int i = 0; i < 1; i++)
+        {
+            m_menu.Add(Menu.CreateMenu<EditPlateMenu>());
+            m_menu[i].SetOffset(192*i, 0);
+        }
     }
 
     void Update()
@@ -24,11 +32,12 @@ public class PlateMode : Mode
         MoveCamera();
         if(Input.GetKeyDown( KeyCode.Space))
         {
-            SaveFile<Plate>(Plate.plate);
+            SaveFile<Plate>(Plate.plate.Values.ToList());
         }
         if(Input.GetKeyDown(KeyCode.Return))
         {
             List<Plate> load = LoadFile<Plate>();
+            Plate.plate.Clear();
             for(int i = 0; i < load.Count; i++)
             {
                 Plate.CreatePlate((load[i]));
@@ -68,11 +77,11 @@ public class PlateMode : Mode
 
         public int GetDistance(Position from, Position to)
         {
-            Position result = new Position(to.x - from.x, to.y - from.y);
-            if (Map.map[from].edge || Map.map[to].edge || (Map.map[Map.GetAdjacent(from, result.x, 0)].edge && Map.map[Map.GetAdjacent(from, 0, result.y)].edge))
+            if (Map.map[to].GetContinent() != null)
             {
                 return -1;
             }
+            Position result = new Position(to.x - from.x, to.y - from.y);
             return result.x*result.x + result.y*result.y;
         }
 
@@ -162,9 +171,18 @@ public class PlateMode : Mode
             }
             else
             {
-                selected[selected.Count - 1].UnSelect();
-                selected[selected.Count - 1].UnHover();
                 selected.RemoveAt(selected.Count - 1);
+            }
+        }
+        else if(selected[0] is Tile)
+        {
+            Tile current_tile = selected[0] as Tile;
+            if (current_tile.GetContinent() != null)
+            {
+                Clear();
+                selected.Add(Plate.plate[current_tile.GetContinent()]);
+                selected[0].OnSelect();
+                Debug.Log(selected[0]);
             }
         }
     }
