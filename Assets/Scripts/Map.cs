@@ -124,7 +124,7 @@ public class Map
         CreateMap();
     }
 
-    protected static void CreateMap()
+   protected static void CreateMap()
     {
         GameObject gameObject = new GameObject();
         gameObject.AddComponent<MapBuilder>();

@@ -13,32 +13,37 @@ public class InvalidContinentShape : System.Exception
 }
 
 [Serializable]
-public struct PlateProperty
+public struct PlateProperty : TileProperty
 {
     public int craton;
-    public string plate_name;
-    public PlateProperty(int craton, string name)
+    public Guid plate_id;
+    public PlateProperty(int craton, Guid id)
     {
         this.craton = craton;
-        this.plate_name = name;
+        this.plate_id = id;
     }
 }
 
 [Serializable]
 public class Plate : Clickable
 {
-    public static Dictionary<String, Plate> plate = new Dictionary<String, Plate>();
+    public static Dictionary<Guid, Plate> plate { get; protected set; } = new Dictionary<Guid, Plate>();
+    public static void Clear()
+    {
+        plate.Clear();
+    }
     public HashSet<Position> border;
-    string name;
+    public string name { set; get; }
+    public Guid id { get; protected set; }
     [Serializable]
     public class Edge
     {
         public List<Position> tile;
         public Position facing;
-        public string plate_name;
-        public Edge(List<Position> tile, string plate_name)
+        public Guid plate_id;
+        public Edge(List<Position> tile, Guid plate_id)
         {
-            this.plate_name = plate_name;
+            this.plate_id = plate_id;
             this.tile = new List<Position>(tile);
         }
 
@@ -51,10 +56,10 @@ public class Plate : Clickable
             int halfway = Mathf.FloorToInt(tile.Count / 2);
             Position outside = GetDirection();
             outside = new Position(outside.y, outside.x * -1);
-            if (plate[plate_name].IsInside(tile[halfway] + outside))
+            if (plate[plate_id].IsInside(tile[halfway] + outside))
             {
                 outside = new Position(outside.x * -1, outside.y * -1);
-                if (plate[plate_name].IsInside(tile[halfway] + outside))
+                if (plate[plate_id].IsInside(tile[halfway] + outside))
                 {
                     facing = new Position(0, 0);
                 }
@@ -64,14 +69,14 @@ public class Plate : Clickable
 
         public bool Validate()
         {
-            Plate parent = plate[plate_name];
+            Plate parent = plate[plate_id];
             int i = 1;
             for(; i < tile.Count-1; i++)
             {
                 if(parent.IsInside(tile[i]+facing))
                 {
                     Debug.Log(tile[i]+ " " + facing + " edge is not valid");
-                    Map.map[tile[i] + facing].SetPlate(new PlateProperty(2, plate_name));
+                    Map.map[tile[i] + facing].SetPlate(new PlateProperty(2, plate_id));
                     return false;
                 }
             }
@@ -83,8 +88,10 @@ public class Plate : Clickable
     {
         try
         {
+            int count = plate.Count;
             this.name = GetName();
-            plate.Add(name, this);
+            id = System.Guid.NewGuid();
+            plate.Add(id, this);
             this.edge = new List<Edge>();
             List<Position> perimeter = new List<Position>(given_tiles);
             int trim = perimeter.FindIndex((tile) => tile == perimeter[perimeter.Count - 1]);
@@ -95,10 +102,14 @@ public class Plate : Clickable
             {
                 FillArea();
             }
+            if (plate.Count == count)
+            {
+                throw new Exception("Plate wasn't created");
+            }
         }
         catch(Exception e)
         {
-            Debug.Log(name + " " + e);
+            Debug.Log(name + id + " " + e + plate);
             throw e;
         }
     }
@@ -109,7 +120,7 @@ public class Plate : Clickable
 
     public static void CreatePlate(Plate given_plate)
     {
-        plate.Add(given_plate.name, given_plate);
+        plate.Add(given_plate.id, given_plate);
         given_plate.FillArea();
     }
     protected void CreateEdges(List<Position> perimeter)
@@ -118,7 +129,6 @@ public class Plate : Clickable
         Position previous_direction = new Position(0, 0);
         Position previous_corner = new Position(0, 0);
         List<Position> current_edge = new List<Position>();
-        // start at one to allow inequality comparison
         int flat = 0;
         for (int i = 0; i < perimeter.Count; i++)
         {
@@ -159,7 +169,7 @@ public class Plate : Clickable
                     flat += Map.GetDirection(current_edge[1], current_edge[0]).x;
                 }
                 previous_direction = new Position(current_direction.x, current_direction.y);
-                edge.Add(new Edge(current_edge, name));
+                edge.Add(new Edge(current_edge, id));
 
                 current_edge.Clear();
                 previous_direction = new Position(next_direction.x, next_direction.y);
@@ -173,7 +183,7 @@ public class Plate : Clickable
         {
             current_edge.AddRange(edge[0].tile.GetRange(1, edge[0].tile.Count - 1));
             edge.RemoveAt(0);
-            edge.Add(new Edge(current_edge, name));
+            edge.Add(new Edge(current_edge, id));
             if (current_edge.Exists((tile) => tile.x == 0) && current_edge.Exists((tile) => tile.x == Map.size.x - 1))
             {
                 flat += Map.GetDirection(current_edge[1], current_edge[0]).x;
@@ -200,7 +210,7 @@ public class Plate : Clickable
                 }
 
             }
-            edge.Add(new Edge(current_edge, name));
+            edge.Add(new Edge(current_edge, id));
             border.UnionWith(current_edge);
         }
         for (int i = 0; i < edge.Count; i++)
@@ -233,15 +243,15 @@ public class Plate : Clickable
             for (int j = 0; j < draw_edge.tile.Count; j++)
             {
                
-                if (Map.map[draw_edge.tile[j]].GetContinent() == null)
+                if (Map.map[draw_edge.tile[j]].GetContinent() == Guid.Empty)
                 {
                     if(draw_edge.Validate())
                     {
-                        Map.map[draw_edge.tile[j]].SetPlate(new PlateProperty(3, name));
+                        Map.map[draw_edge.tile[j]].SetPlate(new PlateProperty(3, id));
                     }
                     else
                     {
-                        Map.map[draw_edge.tile[j]].SetPlate(new PlateProperty(1, name));
+                        Map.map[draw_edge.tile[j]].SetPlate(new PlateProperty(1, id));
 
                     }
                 }
@@ -250,7 +260,7 @@ public class Plate : Clickable
                     Position next_tile = draw_edge.tile[j] + new Position(0, 1);
                     while (!border.Contains(next_tile) && IsInside(next_tile))
                     {
-                        Map.map[next_tile].SetPlate(new PlateProperty(0, name));
+                        Map.map[next_tile].SetPlate(new PlateProperty(0, id));
                         next_tile.y++;
                     }
                 }

@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -8,7 +9,6 @@ public abstract class Menu : Animated
 {
     public static Canvas m_canvas;
     public static EventSystem m_event;
-
     public static void Initialise(Camera given_camera)
     {
         GameObject canvas_object = new GameObject();
@@ -25,40 +25,38 @@ public abstract class Menu : Animated
         m_event.name = "Main Event Handler";
         event_object.AddComponent<StandaloneInputModule>();
         event_object.AddComponent<BaseInput>();
-        PercentageofScreen = m_canvas.pixelRect.width;
+        PercentageofScreen = new Vector2(m_canvas.pixelRect.width/100, m_canvas.pixelRect.height/100);
         half_screen = new Vector2(m_canvas.pixelRect.width / 2, m_canvas.pixelRect.height / 2);
     }
 
-    public static float PercentageofScreen;
+    public static Vector2 PercentageofScreen;
     public static Vector2 half_screen;
     protected BoxCollider2D m_collider;
-    public static Vector2 ConvertImagetoWorldSize(Vector2 image_size)
-    {
-        return new Vector2(100 / image_size.x, 100 / image_size.y);
-    }
+
     public static T CreateMenu<T>() where T: Menu
     {
         GameObject gameObject = new GameObject();
         gameObject.name = typeof(T).Name;
         T menu = gameObject.AddComponent<T>();
         gameObject.transform.SetParent(m_canvas.transform);
+        menu.Initialise();
         return menu;
     }
 
-    public virtual void SetSize(float size)
+    public virtual void SetScreenOffset(float x, float y)
     {
-        gameObject.transform.localScale = new Vector3(PercentageofScreen * size, PercentageofScreen * size, 0);
+        gameObject.transform.localPosition = new Vector3(x - half_screen.x, y - half_screen.y, gameObject.transform.localPosition.z);
     }
 
-    public virtual void SetOffset(float x, float y)
+    public virtual void SetScreenOffset(Vector2 screen_offset)
     {
-        gameObject.transform.localPosition = new Vector3(x - half_screen.x, y - half_screen.y, 0);
-    } 
+        gameObject.transform.localPosition = new Vector3(screen_offset.x - half_screen.x, screen_offset.y - half_screen.y, gameObject.transform.localPosition.z);
+    }
 
-    public void SetCollider(Vector2 image_size)
+    protected override void Initialise()
     {
-        m_collider.offset = new Vector2(1 / image_size.x / 2, 1 / image_size.y / 2);
-        m_collider.size = new Vector2(1 / image_size.x, 1 / image_size.y);
+        this.transform.localPosition = new Vector3(0, 0, 1);
+        base.Initialise();
     }
 
     // Update is called once per frame

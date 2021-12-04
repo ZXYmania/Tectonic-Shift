@@ -4,12 +4,6 @@ using System.Collections.Generic;
 
 public abstract class Animated : MonoBehaviour
 {
-    public enum AnimationLayerType
-    {
-        sprite,
-        image
-    }
-
     protected string animationName;
     protected float m_animationTimer;
     protected Dictionary<string,AnimationLayer> m_animationLayer;
@@ -48,46 +42,38 @@ public abstract class Animated : MonoBehaviour
         return true;
     }
 
-    protected void AddAnimationLayer(string givenName ,string givenAnimation, Color givenColour, bool isPaused, bool givenVisible = true, AnimationLayerType givenType = AnimationLayerType.sprite)
+    protected T AddAnimationLayer<T>(string givenName, string givenAnimation, Color givenColour, bool isPaused, bool givenVisible = true) where T : AnimationLayer, new()
     {
-        if (!m_animationLayer.ContainsKey(givenName))
+
+        T currentAnimation = CreateAnimationLayer<T>();
+
+        GameObject currentObject = gameObject;
+        if (m_animationLayer.Count > 0)
         {
-            AnimationLayer currentAnimation = CreateAnimationLayer(givenType);
-            
-            GameObject currentObject = gameObject;
-            if (m_animationLayer.Count > 0)
-            {
-                currentObject = new GameObject();
-                currentObject.transform.parent = gameObject.transform;
-                currentObject.transform.position = new Vector3(transform.position.x, transform.position.y, -1);
-                currentObject.transform.localScale = new Vector3(1, 1, 1);
-                currentObject.name = givenName;
-            }
-            else
-            {
-                currentObject.name = gameObject.name + " " + givenName;
-            }           
-            currentAnimation.Initialise(currentObject, givenName, givenAnimation, givenColour, isPaused, givenVisible);
-            m_animationLayer.Add(givenName, currentAnimation);
+            currentObject = new GameObject();
+            currentObject.transform.parent = gameObject.transform;
+            currentObject.transform.localPosition = new Vector3(0, 0, 1);
+            currentObject.transform.localScale = new Vector3(1, 1, 1);
+            currentObject.name = givenName;
         }
         else
         {
-            m_animationLayer[givenName].AddSpriteMap(givenAnimation, givenColour);
+            currentObject.name = gameObject.name + " " + givenName;
         }
+        currentAnimation.Initialise(currentObject, givenName, givenAnimation, givenColour, isPaused, givenVisible);
+        m_animationLayer.Add(givenName, currentAnimation);
+        return currentAnimation;
+    
     }
 
-    private AnimationLayer CreateAnimationLayer(AnimationLayerType givenType)
+    protected void AddAnimationLayer(string givenName, AnimationLayer givenLayer)
     {
-        switch(givenType)
-        {
-            case AnimationLayerType.image:
-                return new ImageAnimationLayer();
-            case AnimationLayerType.sprite:
-                return new SpriteLayer();
-            default:
-                throw new System.NotImplementedException();
+        m_animationLayer.Add(givenName, givenLayer);
+    }
 
-        }
+    private T CreateAnimationLayer<T>() where T: AnimationLayer, new ()
+    {
+        return new T();
     }
 
     protected void AddAnimation(string givenLayer, string givenAnimation, Color givenColour)
@@ -99,9 +85,22 @@ public abstract class Animated : MonoBehaviour
     {
         m_animationLayer[givenLayer].ChangeAnimation(givenAniamtion,givenFrame);
     }
+
+    protected T GetAnimationLayer<T>(string givenLayer) where T: AnimationLayer
+    {
+        return (T) m_animationLayer[givenLayer];
+    }
     protected void ChangeSpriteMap(string givenLayer,string givenSpriteMap, int givenAnimation = 0, int givenFrame = 0)
     {
         m_animationLayer[givenLayer].ChangeSpriteMap(givenSpriteMap, givenAnimation, givenFrame);
+    }
+
+    protected void SetVisible(bool visible)
+    {
+        foreach (KeyValuePair<string, AnimationLayer> item in m_animationLayer)
+        {
+            m_animationLayer[item.Key].SetVisible(visible);
+        }
     }
 
 }

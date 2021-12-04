@@ -20,7 +20,7 @@ public class SpriteLayer : AnimationLayer
     }
     SpriteRenderer m_renderer;
     //Each Gameobject has it's own Layer
-    public GameObject GetLayer()
+    public override GameObject GetLayer()
     {
         if (m_animationList.Count < 0)
         {
@@ -33,7 +33,7 @@ public class SpriteLayer : AnimationLayer
     public override void SetAnimationPosition(int givenX, int givenY, int givenZ = 0) { m_renderer.gameObject.transform.localPosition = new Vector3(givenX, givenY, givenZ); }
     public override void SetAnimationSize(float givenSize) { m_renderer.gameObject.transform.localScale = new Vector3(givenSize, givenSize, 1); }
 
-    public override void ChangeVisible()
+    public override void DisplayImage()
     {
         m_renderer.enabled = m_visible;
     }

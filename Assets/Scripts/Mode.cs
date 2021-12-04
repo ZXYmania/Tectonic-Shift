@@ -35,13 +35,13 @@ public class SaveData
 public abstract class Mode : MonoBehaviour
 {
     protected static List<Clickable> selected;
-    protected static Clickable hover;
     private static Camera m_camera;
     private static float camera_speed = 45;
     public static Mode current_menu { get; protected set; }
 
     public void SetUp()
     {
+		TextureController.folderPath = new string[] { "Texture" };
         TextureController.Initialise();
         m_camera = gameObject.GetComponent<Camera>();
         Map.Initialise();
@@ -118,23 +118,6 @@ public abstract class Mode : MonoBehaviour
 		transform.position += Vector3.Normalize(movevector) * camera_speed * Time.deltaTime;
 
 	}
-	public static void Select(Clickable clicked)
-    {
-		if (selected.Count == 0 || clicked != selected[selected.Count-1] )
-		{
-			selected.Add(clicked);
-			current_menu.OnSelect();
-		}
-    }
-
-    public static void Hover(Clickable hovered)
-    {
-        if(hover != hovered)
-        {
-            hover = hovered;
-            current_menu.OnHover();
-        }
-    }
 
     public virtual void Clear()
     {
@@ -144,8 +127,6 @@ public abstract class Mode : MonoBehaviour
         }
         selected.Clear();
     }
-    public abstract void OnSelect();
-    public abstract void OnHover();
 
     public abstract void OnModeEnter();
     public abstract void OnModeExit();

@@ -53,10 +53,11 @@
     <UnityVersion>2021.1.16f1</UnityVersion>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="Assets\Scripts\SaveButton.cs" />
+    <Compile Include="Assets\Scripts\SaveMenu.cs" />
     <Compile Include="Assets\Scripts\Animation\PlayAnimation.cs" />
     <Compile Include="Assets\Scripts\Animation\TextureController.cs" />
     <Compile Include="Assets\Scripts\Animation\Animated.cs" />
+    <Compile Include="Assets\Scripts\UI\InputFieldLayer.cs" />
     <Compile Include="Assets\Scripts\Tile.cs" />
     <Compile Include="Assets\Scripts\Animation\AudioController.cs" />
     <Compile Include="Assets\Scripts\Animation\SpriteMap.cs" />
@@ -65,11 +66,12 @@
     <Compile Include="Assets\Scripts\Animation\AnimationLayer.cs" />
     <Compile Include="Assets\Scripts\Plate\PlateMenu.cs" />
     <Compile Include="Assets\Scripts\UI\Menu.cs" />
+    <Compile Include="Assets\Scripts\UI\ButtonLayer.cs" />
     <Compile Include="Assets\Scripts\Mode.cs" />
     <Compile Include="Assets\Scripts\Animation\SpriteLayer.cs" />
     <Compile Include="Assets\Scripts\Plate\Plate.cs" />
     <Compile Include="Assets\Scripts\Plate\PlateMode.cs" />
-    <Compile Include="Assets\Scripts\UI\TextBox.cs" />
+    <Compile Include="Assets\Scripts\UI\MenuLayer.cs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="UnityEngine">

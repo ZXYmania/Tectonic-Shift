@@ -66,9 +66,17 @@ public struct Position
         return "(" + x + "," + y + ")";
     }
 }
+
+public interface TileProperty
+{
+
+}
 [Serializable]
 public class Tile : Animated, Clickable
 {
+    public static event Action<Tile> Clicked = delegate { };
+    public static event Action<Tile> Hovered = delegate { };
+
     public static Tile CreateTile(int x, int y)
     {
         GameObject gameObject = new GameObject();
@@ -83,9 +91,19 @@ public class Tile : Animated, Clickable
     public bool selected;
     public bool hovered;
     protected PlateProperty plate;
-    public string GetContinent()
+    Dictionary<string, TileProperty> m_properties;
+    
+    public T GetProperty<T>() where T : TileProperty, new()
     {
-        return plate.plate_name;
+        if(m_properties.ContainsKey(typeof(T).Name))
+        {
+            return (T) m_properties[typeof(T).Name];
+        }
+        return new T();
+    }
+    public Guid GetContinent()
+    {
+        return plate.plate_id;
     }
 
     public int GetCraton()
@@ -96,9 +114,10 @@ public class Tile : Animated, Clickable
     protected override void Initialise()
     {
         base.Initialise();
-        AddAnimationLayer("plate", "plates", Color.black, true);
-        AddAnimationLayer("border", "plates", Color.red, true, false);
+        AddAnimationLayer<SpriteLayer>("plate", "plates", Color.black, true);
+        AddAnimationLayer<SpriteLayer>("border", "plates", Color.red, true, false);
         SetTransform(position.x, position.y);
+        m_animationLayer["border"].SetAnimationPosition(0, 0, -1);
         selected = false;
         hovered = false;
     }
@@ -116,13 +135,12 @@ public class Tile : Animated, Clickable
 
     void OnMouseDown()
     {
-       Mode.Select(this);
+        Clicked(this);
     }
 
-    void OnMouseOver()
+    void OnMouseEnter()
     {
-        OnHover();
-        Mode.Hover(this);
+        Hovered(this);
     }
 
     void OnMouseExit()
@@ -140,7 +158,7 @@ public class Tile : Animated, Clickable
     public void OnHover()
     {
         hovered = true;
-        m_animationLayer["border"].SetVisible(selected || hovered);
+        m_animationLayer["border"].SetVisible(true);
     }
 
     public void UnHover()
@@ -152,7 +170,8 @@ public class Tile : Animated, Clickable
     public void OnSelect()
     {
         selected = true;
-        m_animationLayer["border"].SetVisible(selected || hovered);
+        UnHover();
+        m_animationLayer["border"].SetVisible(selected);
     }
 
     public void UnSelect()

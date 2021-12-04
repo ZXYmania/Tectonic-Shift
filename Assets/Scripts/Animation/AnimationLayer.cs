@@ -15,6 +15,7 @@ public abstract class AnimationLayer
     }
     string m_name;
     public string GetName() { return m_name; }
+    public GameObject m_object;
 	protected string currentSpriteMap;
     protected int currentAnimation;
     protected int nextAnimation;
@@ -37,10 +38,14 @@ public abstract class AnimationLayer
 	public void TogglePause() {m_pause = !m_pause;}
     //Set the pause
 	public void SetPause(bool givenToggle) {m_pause = givenToggle;}
-	public void SetVisible(bool givenVisible)
+    private void ChangeVisible()
+    {
+        m_visible = nextVisible;
+        DisplayImage();
+    }
+	public virtual void SetVisible(bool givenVisible)
     {
         nextVisible = givenVisible;
-        currentFrame = 0;
     }
     public bool GetVisible() { return m_visible; }
 	public int GetAnimationFrame() 	
@@ -99,6 +104,7 @@ public abstract class AnimationLayer
 	public Vector2 GetDefaultAnimationSize() {return m_animationList[currentSpriteMap].GetAnimation(currentAnimation).GetSprite(0).rect.size;}
     public virtual void Initialise(GameObject givenObject, string givenName, string startingSpriteMap, Color givenColour, bool givenToggle, bool givenVisible)
     {
+        m_object = givenObject;
         m_name = givenName;
         m_pause = givenToggle;
         currentFrame = 0;
@@ -114,7 +120,11 @@ public abstract class AnimationLayer
 
     public virtual void Animate()
     {
-        if (m_visible || nextVisible)
+        if(m_visible != nextVisible)
+        {
+            ChangeVisible();
+        }
+        if (m_visible)
         {
             if (!m_pause)
             {
@@ -141,13 +151,11 @@ public abstract class AnimationLayer
                 SetTexture(m_animationList[currentSpriteMap].GetAnimation(currentAnimation).GetSprite(currentFrame));
                 setAnimation = currentAnimation;
             }
-            m_visible = nextVisible;
-            ChangeVisible();
         }
     }
     public abstract void SetTexture(Sprite givenTexture);
     public abstract void SetAnimationSize(float givenSize);
     public abstract void SetAnimationPosition(int givenX, int givenY, int givenZ = 0);
-
-    public abstract void ChangeVisible();
+    public abstract GameObject GetLayer();
+    public abstract void DisplayImage();
 }

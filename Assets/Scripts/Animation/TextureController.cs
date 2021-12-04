@@ -29,7 +29,6 @@ public static class TextureController
 	{
         //Fix tearing
         //Requires a default material to be built that has pixel snap turned on
-
         default_material = Resources.Load<Material>("default");
         if(default_material == null)
         {
@@ -42,23 +41,31 @@ public static class TextureController
 
     private static void LoadSpriteMaps()
 	{
-		Color currentColour = transparent;		
-		//Get the texture folder
-		string tempPath = "Texture";
-		//Load the sprites found at the path
-		Texture2D[] tempSpriteMap = Resources.LoadAll<Texture2D>(tempPath);
-		//For each sprite map
-		for(int i = 0; i < tempSpriteMap.Length; i++)
-		{
-			//Fix border affecting image
-            tempSpriteMap[i].filterMode = FilterMode.Point;
-            if(tempSpriteMap[i].isReadable)
+        //So people don't have to set a folder path if they don't care
+        if (folderPath.Length == 0)
+        {
+            folderPath = new string[] { "" };
+        }
+        Color currentColour = transparent;
+        for (int i = 0; i < folderPath.Length; i++)
+        {
+            //Get the texture folder
+            string tempPath = folderPath[i];
+            //Load the sprites found at the path
+            Texture2D[] tempSpriteMap = Resources.LoadAll<Texture2D>(tempPath);
+            //For each sprite map
+            for (int j = 0; j < tempSpriteMap.Length; j++)
             {
-                SetAnimations(tempSpriteMap[i]);
-            }
-            else
-            {
-                Debug.Log(tempSpriteMap.ToString() + " is not readable and was not loaded");
+                //Fix border affecting image
+                tempSpriteMap[j].filterMode = FilterMode.Point;
+                if (tempSpriteMap[j].isReadable)
+                {
+                    SetAnimations(tempSpriteMap[j]);
+                }
+                else
+                {
+                    Debug.Log(tempSpriteMap[j].name + " is not readable and was not loaded");
+                }
             }
         }
     }
