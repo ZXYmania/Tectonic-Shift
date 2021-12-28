@@ -69,14 +69,14 @@ public struct Position
 
 public interface TileProperty
 {
-
+    public Tuple<string, int> Animate();
 }
 [Serializable]
 public class Tile : Animated, Clickable
 {
     public static event Action<Tile> Clicked = delegate { };
     public static event Action<Tile> Hovered = delegate { };
-
+    public static string draw_property;
     public static Tile CreateTile(int x, int y)
     {
         GameObject gameObject = new GameObject();
@@ -90,7 +90,6 @@ public class Tile : Animated, Clickable
     public Position position { get; protected set; }
     public bool selected;
     public bool hovered;
-    protected PlateProperty plate;
     Dictionary<string, TileProperty> m_properties;
     
     public T GetProperty<T>() where T : TileProperty, new()
@@ -101,14 +100,17 @@ public class Tile : Animated, Clickable
         }
         return new T();
     }
-    public Guid GetContinent()
-    {
-        return plate.plate_id;
-    }
 
-    public int GetCraton()
+    public void SetProperty<T>(T given_property) where T : TileProperty, new()
     {
-        return plate.craton;
+        string name = typeof(T).Name;
+        m_properties[name] = given_property;
+        if(name == draw_property)
+        {
+            Tuple<string, int> animation = given_property.Animate();
+            m_animationLayer[animation.Item1].ChangeAnimation(animation.Item2);
+        }
+
     }
 
     protected override void Initialise()
@@ -120,6 +122,7 @@ public class Tile : Animated, Clickable
         m_animationLayer["border"].SetAnimationPosition(0, 0, -1);
         selected = false;
         hovered = false;
+        m_properties = new Dictionary<string, TileProperty>();
     }
 
     void Start()
@@ -178,11 +181,5 @@ public class Tile : Animated, Clickable
     {
         selected = false;
         m_animationLayer["border"].SetVisible(selected || hovered);
-    }
-
-    public void SetPlate(PlateProperty plate)
-    {
-        this.plate = plate; 
-        m_animationLayer["plate"].ChangeAnimation(plate.craton);
     }
 }

@@ -32,6 +32,7 @@ public class SaveData
 		this.size = size;
 	}
 }
+
 public abstract class Mode : MonoBehaviour
 {
     protected static List<Clickable> selected;
@@ -49,10 +50,10 @@ public abstract class Mode : MonoBehaviour
         m_camera.transform.position = new Vector3(Map.size.x / 2, Map.size.y / 2, -10);
 		Menu.Initialise(m_camera);
 	}
-
-	public void SaveFile<T>(List<T> data)
+	
+	public void SaveFile<T>(List<T> data, string name = "map.dat")
 	{
-		string destination = Application.persistentDataPath + "/map.dat";
+		string destination = Application.persistentDataPath + "/" + name;
 		FileStream file;
 
 		if (File.Exists(destination)) file = File.OpenWrite(destination);
@@ -64,23 +65,33 @@ public abstract class Mode : MonoBehaviour
 		file.Close();
 	}
 
-	public List<T> LoadFile<T>()
+	public List<T> LoadFile<T>(string name = "map.dat")
 	{
-		string destination = Application.persistentDataPath + "/map.dat";
+		string destination = Application.persistentDataPath + "/" + name;
 		FileStream file;
 
 		if (File.Exists(destination)) file = File.OpenRead(destination);
 		else
 		{
 			Debug.LogError("File not found");
-			throw new FileNotFoundException("map.dat does not exist");
+			return new List<T>();
 		}
 
 		BinaryFormatter bf = new BinaryFormatter();
-		object test =  bf.Deserialize(file);
-		List<T> data = (List<T>) bf.Deserialize(file);
-		file.Close();
-		return data;
+		SaveData test =  (SaveData) bf.Deserialize(file);
+		try
+		{
+			List<T> data = (List<T>)bf.Deserialize(file);
+			file.Close();
+			return data;
+		}
+		catch (Exception e)
+        {
+			file.Close();
+			string type_name = typeof(T).Name;
+			throw new Exception(name + " has been changed or " + file + " is not of type " + name + " | " + e);
+        }
+
 	}
 
 	public void MoveCamera()
