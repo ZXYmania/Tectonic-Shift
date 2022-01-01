@@ -92,7 +92,7 @@ public class Tile : Animated, Clickable
     public bool hovered;
     Dictionary<string, TileProperty> m_properties;
     
-    public T GetProperty<T>() where T : TileProperty, new()
+    public T GetProperty<T>() where T : struct,TileProperty
     {
         if(m_properties.ContainsKey(typeof(T).Name))
         {
@@ -101,7 +101,7 @@ public class Tile : Animated, Clickable
         return new T();
     }
 
-    public void SetProperty<T>(T given_property) where T : TileProperty, new()
+    public void SetProperty<T>(T given_property) where T : struct, TileProperty
     {
         string name = typeof(T).Name;
         m_properties[name] = given_property;

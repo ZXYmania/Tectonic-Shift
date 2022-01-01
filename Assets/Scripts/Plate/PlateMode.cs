@@ -12,16 +12,22 @@ namespace PlateSpace
 {
     public class PlateMode : Mode
     {
-
-        public static List<Position> draw_hover;
-        public static List<Position> draw_selected;
-        protected static bool waiting;
+        public static event Action<Guid> EndFindPath = delegate { };
         protected static bool focused;
         Dictionary<string,Menu> m_menu;
+        protected static PlateState current_state;
 
         protected T GetMenu<T>() where T : Menu
         {
             return (T)m_menu[typeof(T).Name];
+        }
+
+        public static void ChangeState(PlateState next_state)
+        {
+            current_state.OnActionLeave();
+            current_state.Clear();
+            next_state.OnActionEnter();
+            PlateMode.current_state = next_state;
         }
         protected EditPlateMenu GetPlateMenu(Plate selected_plate)
         {
@@ -35,7 +41,7 @@ namespace PlateSpace
         }
         void Start()
         {
-            if (current_menu == null)
+            if (current_mode == null)
             {
                 SetUp();
             }
@@ -44,19 +50,15 @@ namespace PlateSpace
 
         public void Initialise()
         {
-            Mode.current_menu = this;
+            Mode.current_mode = this;
             selected = new List<Clickable>();
-            draw_hover = new List<Position>();
-            draw_selected = new List<Position>();
             m_menu = new Dictionary<string, Menu>();
-            Tile.Clicked += OnClick;
-            Tile.Hovered += OnHover;
-            EditPlateMenu.Clicked += OnClick;
             TextField.Selected += Focus;
             TextField.UnSelected += Unfocus;
-            SaveMenu.Save += OnClick;
-            SaveMenu save = Menu.CreateMenu<SaveMenu>();
             Tile.draw_property = typeof(PlateProperty).Name;
+            SaveMenu save = Menu.CreateMenu<SaveMenu>();
+            current_state = new DefaultState();
+            current_state.OnActionEnter();
         }
 
         void Update()
@@ -64,34 +66,22 @@ namespace PlateSpace
             if (!focused)
             {
                 MoveCamera();
-            }
-            if (selected.Count > 0)
-            {
-                if (!Input.GetKeyDown(KeyCode.Mouse0) && Input.GetKeyDown(KeyCode.Mouse1))
+                if (Input.GetKeyDown(KeyCode.Mouse1))
                 {
-
-                    UnSelect(selected[selected.Count - 1]);
+                    current_state.Unselect();
                 }
-                if (draw_selected.Count((item) => item == draw_selected[draw_selected.Count - 1]) > 1)
+                else
                 {
-                    draw_selected.AddRange(draw_hover);
-                    try
-                    {
-                        Plate.CreatePlate(new List<Position>(draw_selected));
-                    }
-                    catch (CreatePlateError e)
-                    {
-                        SaveFile<CreatePlateErrorData>(new List<CreatePlateErrorData>() { e.m_data }, e.m_data.m_id + ".dat");
-                    }
-                    Clear();
+                    current_state.CommitAction();
                 }
             }
         }
-        public class PlateDrawContoller : DrawContoller
+        public struct PlateDrawController : DrawController
         {
-            static JobHandle current_job;
-            protected static FindPath path;
+            public void Initialise()
+            {
 
+            }
             public int GetDistance(Position from, Position to)
             {
                 if (Map.map[to].GetProperty<PlateProperty>().plate_id != Guid.Empty)
@@ -101,59 +91,14 @@ namespace PlateSpace
                 Position result = new Position(to.x - from.x, to.y - from.y);
                 return result.x * result.x + result.y * result.y;
             }
-
-            public bool QuickStop()
-            {
-                return waiting;
-            }
-
-
-            public static void ScheduleFindPath(Tile start, Tile end)
-            {
-                EndFindPath();
-                waiting = false;
-                path = new FindPath(start, end);
-                current_job = path.Schedule();
-            }
-
-            public static void EndFindPath()
-            {
-                if (!current_job.IsCompleted)
-                {
-                    waiting = true;
-                    current_job.Complete();
-                }
-            }
         }
 
-        public struct FindPath : IJob
+        public static void KillPath(Guid given_id)
         {
-            public Position start;
-            public Position destination;
-            public FindPath(Tile start, Tile destination)
-            {
-                this.start = start.position;
-                this.destination = destination.position;
-            }
-
-            public void Execute()
-            {
-                try
-                {
-                    draw_hover = Map.DrawLine(start, destination, new PlateDrawContoller());
-                    for (int i = 0; i < draw_hover.Count; i++)
-                    {
-                        Map.map[draw_hover[i]].OnHover();
-                    }
-                }
-                catch (Map.NoPathException)
-                {
-                    Map.map[destination].UnHover();
-                }
-            }
+            EndFindPath(given_id);
         }
 
-        public void OnClick(Tile given_tile)
+        /*public void OnClick(Tile given_tile)
         {
             selected.Add(given_tile);
             PlateProperty tile_property = given_tile.GetProperty<PlateProperty>();
@@ -198,101 +143,22 @@ namespace PlateSpace
             Debug.Log("Menu event started");
         }
 
-        public void OnClick(bool save)
-        {
-            if (save)
-            {
-                SaveFile<Plate>(Plate.plate.Values.ToList());
-            }
-            else
-            {
-                List<Plate> load = LoadFile<Plate>();
-                Plate.plate.Clear();
-                for (int i = 0; i < load.Count; i++)
-                {
-                    Plate.CreatePlate((load[i]));
-                }
-                List<CreatePlateErrorData> error = LoadFile<CreatePlateErrorData>("error.dat");
-            }
-            Clear();
-        }
 
-
-        public void OnHover(Tile given_tile)
-        {
-            if (selected.Count > 0)
-            {
-                if (selected[selected.Count - 1] is Tile)
-                {
-                    Tile start = (Tile)selected[selected.Count - 1];
-                    Tile destination = given_tile;
-                    List<Position> draw_copy = new List<Position>(draw_hover);
-                    PlateDrawContoller.EndFindPath();
-                    ClearHover();
-                    PlateDrawContoller.ScheduleFindPath(start, destination);
-                }
-            }
-            given_tile.OnHover();
-        }
 
         public void UnHover(Tile given_tile)
         {
             given_tile.UnHover();
         }
 
-        public void UnSelect(Clickable unselected)
+        /*public void UnSelect(Clickable unselected)
         {
-            if (unselected is Tile)
-            {
-                Tile unselected_tile = (Tile)unselected;
-                unselected.UnSelect();
-                unselected.UnHover();
-                List<Position> unselected_list = draw_selected;
-                if (selected.Count > 1)
-                {
-                    int index = draw_selected.IndexOf(((Tile)selected[selected.Count - 2]).position);
-                    unselected_list = draw_selected.GetRange(index + 1, draw_selected.Count - index - 1);
-                    draw_selected.RemoveRange(index + 1, draw_selected.Count - index - 1);
-                }
-                else
-                {
-                    draw_selected.Clear();
-                    ClearHover();
-                }
-                for (int i = 0; i < unselected_list.Count; i++)
-                {
-                    Map.map[unselected_list[i]].UnSelect();
-                }
-                selected.RemoveAt(selected.Count - 1);
-            }
-            else if (selected[0] is Plate)
+             if (selected[0] is Plate)
             {
                 GetMenu<EditPlateMenu>().UnSelect();
                 Clear();
             }
             
-        }
-
-
-        public static void ClearHover()
-        {
-            for (int i = 1; i < draw_hover.Count; i++)
-            {
-                Map.map[draw_hover[i]].UnHover();
-            }
-            draw_hover.Clear();
-        }
-
-        public override void Clear()
-        {
-            for (int i = 0; i < draw_selected.Count; i++)
-            {
-                Map.map[draw_selected[i]].UnSelect();
-            }
-            draw_selected.Clear();
-            ClearHover();
-            base.Clear();
-        }
+        }*/
 
         public void Focus(TextField given_field)
         {

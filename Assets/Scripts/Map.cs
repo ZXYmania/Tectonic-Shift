@@ -1,11 +1,27 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+using Unity.Collections;
 using Unity.Jobs;
 using UnityEngine;
 
 public class Map
 {
+    public static Position size { get; protected set; } = new Position(200, 100);
+    public static int scale { get; protected set; }
+    public static Dictionary<Position, Tile> map { get; protected set; }
+    public static void Initialise()
+    {
+        scale = Mathf.CeilToInt(40000 / size.x);
+        Debug.Log(scale);
+        if (map is null)
+        {
+            map = new Dictionary<Position, Tile>();
+        }
+        CreateMap();
+    }
     public class NoPathException : System.Exception
     {
         public NoPathException(string message) : base(message)
@@ -16,37 +32,24 @@ public class Map
 
     public class MapBuilder : MonoBehaviour
     {
-        public Position upto;
+        protected Coroutine build;
         private void Start()
         {
-            upto = new Position(0, 0);
+            build = StartCoroutine(BuildMap());
         }
-        void Update()
-        {
-            int count = 0;
-            int rate_limit = 50;
-            if (upto.y >= Map.size.y)
-            {
-                upto.x++;
-                upto.y = 0;
-            }
-            if (!Map.map.ContainsKey(new Position(size.x -1, size.y -1)))
-            {
-                for (int i = upto.x; i < Map.size.x; i++)
-                {
 
-                    for (int j = upto.y; j < Map.size.y; j++)
+        protected IEnumerator BuildMap()
+        {
+            if (!Map.map.ContainsKey(new Position(size.x - 1, size.y - 1)))
+            {
+                for (int i = 0; i < Map.size.x; i++)
+                {
+                    for (int j = 0; j < Map.size.y; j++)
                     {
-                        upto.y = 0;
                         Tile curr_tile = Tile.CreateTile(i, j);
                         Map.map.Add(curr_tile.position, curr_tile);
-                        if( count++ > rate_limit)
-                        {
-                            upto = new Position(i, j+1);
-                            i = Map.size.x+1;
-                            j = Map.size.y+1;
-                        }
                     }
+                    yield return null;
                 }
             }
             else
@@ -56,9 +59,6 @@ public class Map
         }
 
     }
-    public static Dictionary<Position, Tile> map { get; protected set; }
-
-
     public struct AStarData
     {
         public Position previous_tile;
@@ -109,21 +109,6 @@ public class Map
         }
 
     }
-
-    public static Position size { get; protected set; } = new Position(125, 75);
-    public static int scale { get; protected set; }
-
-    public static void Initialise()
-    {
-        scale = Mathf.CeilToInt(40000 / size.x);
-        Debug.Log(scale);
-        if(map is null)
-        {
-            map = new Dictionary<Position, Tile>();
-        }
-        CreateMap();
-    }
-
    protected static void CreateMap()
     {
         GameObject gameObject = new GameObject();
@@ -165,118 +150,136 @@ public class Map
         }
         return result;
     }
-    public static List<Position> DrawLine(Tile start, Tile destination, DrawContoller draw_option)
-    {
-        if(start == destination)
-        {
-            return new List<Position>() { start.position };
-        }
-        return DrawLine(start.position, destination.position, draw_option);
-    }
 
-    public static List<Position> DrawLine(Position start, Position destination, DrawContoller draw_option)
+    public struct FindPath<T> : IJob where T : struct, DrawController
     {
-        if (start == destination)
+        public static event Action<List<Position>> FoundPath = delegate { };
+        public static event Action<Map.NoPathException> NoPath = delegate { };
+        public static event Action Finish = delegate { };
+        public Position m_start;
+        public Position m_destination;
+        public T m_controller;
+        public static HashSet<Guid> current = new HashSet<Guid>();
+        public Guid m_id;
+        public FindPath(Tile start, Tile destination)
         {
-            return new List<Position>() { start };
+            m_id = Guid.NewGuid();
+            m_start = start.position;
+            m_destination = destination.position;
+            m_controller = new T();
+            m_controller.Initialise();
         }
-        Dictionary<Position, AStarData> data_map = new Dictionary<Position, AStarData>();
-        AStarData.WasteComparer waste_comparer = new AStarData.WasteComparer(data_map);
-        SortedSet<Position> quick_search = new SortedSet<Position>(waste_comparer);
-        SortedSet<Position> medium_search = new SortedSet<Position>(waste_comparer);
-        SortedSet<Position> slow_search = new SortedSet<Position>(waste_comparer);
-        SortedSet<Position> backwards_search = new SortedSet<Position>(waste_comparer);
 
-        // first position is tile, second position is x = distance travelled and y = waste
-        quick_search.Add(start);
-        data_map.Add(start, new AStarData(new Position(-1, -1), 0, 0));
-        List<Position> result = new List<Position>();
-        Position current_tile = start;
-        bool path_found = false;
-        while (!path_found && !draw_option.QuickStop() && (quick_search.Count + medium_search.Count + slow_search.Count > 0 ) )
+        public void Execute()
         {
-            AStarData current_data = new AStarData(data_map[current_tile], true);
-            data_map[current_tile] = current_data;
-            Position goal_direction = GetDirection(current_tile, destination);
-            for (int i = -1; i <= 1; i++)
+            if (m_start == m_destination)
             {
-                for (int j = -1; j <= 1; j++)
+                FoundPath(new List<Position>() { m_start });
+            }
+            else
+            {
+                Dictionary<Position, AStarData> data_map = new Dictionary<Position, AStarData>();
+                AStarData.WasteComparer waste_comparer = new AStarData.WasteComparer(data_map);
+                SortedSet<Position> quick_search = new SortedSet<Position>(waste_comparer);
+                SortedSet<Position> medium_search = new SortedSet<Position>(waste_comparer);
+                SortedSet<Position> slow_search = new SortedSet<Position>(waste_comparer);
+                SortedSet<Position> backwards_search = new SortedSet<Position>(waste_comparer);
+
+                // first position is tile, second position is x = distance travelled and y = waste
+                quick_search.Add(m_start);
+                data_map.Add(m_start, new AStarData(new Position(-1, -1), 0, 0));
+                List<Position> result = new List<Position>();
+                Position current_tile = m_start;
+                bool path_found = false;
+                while (!path_found && current.Contains(m_id) && (quick_search.Count + medium_search.Count + slow_search.Count > 0))
                 {
-                    Position adjacent_tile = GetAdjacent(current_tile, i, j);
-                    if (map.ContainsKey(adjacent_tile))
+                    AStarData current_data = new AStarData(data_map[current_tile], true);
+                    data_map[current_tile] = current_data;
+                    Position goal_direction = GetDirection(current_tile, m_destination);
+                    for (int i = -1; i <= 1; i++)
                     {
-                        if (adjacent_tile == destination)
+                        for (int j = -1; j <= 1; j++)
                         {
-                            if (draw_option.GetDistance(current_tile, adjacent_tile) > 0)
+                            Position adjacent_tile = GetAdjacent(current_tile, i, j);
+                            if (map.ContainsKey(adjacent_tile))
                             {
-                                float distance = current_data.distance + draw_option.GetDistance(current_tile, adjacent_tile);
-                                float waste = current_data.waste;
-                                data_map.Add(adjacent_tile, new AStarData(current_tile, distance, waste));
-                                path_found = true;
-                            }
-                        }
-                        else if(data_map.ContainsKey(adjacent_tile))
-                        {
-                            float distance = draw_option.GetDistance(current_tile, adjacent_tile);
-                            distance += current_data.distance;
-                            if (distance < data_map[adjacent_tile].distance)
-                            {
-                                data_map[adjacent_tile] = new AStarData(current_tile, distance, data_map[adjacent_tile].waste);
-                            }
-                        }
-                        else
-                        {
-                            float distance = draw_option.GetDistance(current_tile, adjacent_tile);
-                            if (distance > 0)
-                            {
-                                float waste = (goal_direction.x - i) * (goal_direction.x - i) + (goal_direction.y - j) * (goal_direction.y - j);
-                                data_map.Add(adjacent_tile, new AStarData(current_tile, distance + current_data.distance, current_data.waste + waste));
-                                
-                                if (waste  < 0.5)
+                                if (adjacent_tile == m_destination)
                                 {
-                                    quick_search.Add(adjacent_tile);
+                                    if (m_controller.GetDistance(current_tile, adjacent_tile) > 0)
+                                    {
+                                        float distance = current_data.distance + m_controller.GetDistance(current_tile, adjacent_tile);
+                                        float waste = current_data.waste;
+                                        data_map.Add(adjacent_tile, new AStarData(current_tile, distance, waste));
+                                        path_found = true;
+                                    }
                                 }
-                                else if (waste <= 2)
+                                else if (data_map.ContainsKey(adjacent_tile))
                                 {
-                                    medium_search.Add(adjacent_tile);
+                                    float distance = m_controller.GetDistance(current_tile, adjacent_tile);
+                                    distance += current_data.distance;
+                                    if (distance < data_map[adjacent_tile].distance)
+                                    {
+                                        data_map[adjacent_tile] = new AStarData(current_tile, distance, data_map[adjacent_tile].waste);
+                                    }
                                 }
                                 else
                                 {
-                                    slow_search.Add(adjacent_tile);
+                                    float distance = m_controller.GetDistance(current_tile, adjacent_tile);
+                                    if (distance > 0)
+                                    {
+                                        float waste = (goal_direction.x - i) * (goal_direction.x - i) + (goal_direction.y - j) * (goal_direction.y - j);
+                                        data_map.Add(adjacent_tile, new AStarData(current_tile, distance + current_data.distance, current_data.waste + waste));
+
+                                        if (waste < 0.5)
+                                        {
+                                            quick_search.Add(adjacent_tile);
+                                        }
+                                        else if (waste <= 2)
+                                        {
+                                            medium_search.Add(adjacent_tile);
+                                        }
+                                        else
+                                        {
+                                            slow_search.Add(adjacent_tile);
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
+                    if (quick_search.Count > 0)
+                    {
+                        current_tile = quick_search.Min;
+                        quick_search.Remove(current_tile);
+                    }
+                    else if (medium_search.Count > 0)
+                    {
+                        current_tile = medium_search.Min;
+                        medium_search.Remove(current_tile);
+                    }
+                    else if (slow_search.Count > 0)
+                    {
+                        current_tile = slow_search.Min;
+                        slow_search.Remove(current_tile);
+                    }
+                }
+                if (!data_map.ContainsKey(m_destination))
+                {
+                    NoPath(new NoPathException(m_start + " to " + m_destination + " has no path"));
+                }
+                else
+                { 
+                    AStarData item = data_map[m_destination];
+                    result.Add(m_destination);
+                    while (data_map.ContainsKey(item.previous_tile) && result[result.Count - 1] != item.previous_tile)
+                    {
+                        result.Add(item.previous_tile);
+                        item = data_map[item.previous_tile];
+                    }
+                    result.Reverse();
+                    FoundPath(result);
                 }
             }
-            if (quick_search.Count > 0)
-            {
-                current_tile = quick_search.Min;
-                quick_search.Remove(current_tile);
-            }
-            else if (medium_search.Count > 0)
-            {
-                current_tile = medium_search.Min;
-                medium_search.Remove(current_tile);
-            }
-            else if (slow_search.Count > 0)
-            {
-                current_tile = slow_search.Min;
-                slow_search.Remove(current_tile);
-            }
         }
-        if (!data_map.ContainsKey(destination))
-        {
-            throw new NoPathException(start +" to "+ destination +" has no path");
-        }
-        AStarData item = data_map[destination];
-        result.Add(destination);
-        while (data_map.ContainsKey(item.previous_tile) && result[result.Count -1] != item.previous_tile)
-        {
-            result.Add(item.previous_tile);
-            item = data_map[item.previous_tile];
-        }
-        result.Reverse();
-        return result;
     }
 }
