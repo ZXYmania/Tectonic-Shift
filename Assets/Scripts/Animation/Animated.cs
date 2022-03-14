@@ -12,11 +12,12 @@ public abstract class Animated : MonoBehaviour
     protected virtual void Initialise(Vector2 givenPosition)
     {
         SetTransform(givenPosition);
-        m_animationLayer = new Dictionary<string, AnimationLayer>();
+        Initialise();
     }
     protected virtual void Initialise()
     {
         m_animationLayer = new Dictionary<string, AnimationLayer>();
+
     }
 
     protected virtual void SetTransform(Vector2 givenVector)
@@ -62,6 +63,7 @@ public abstract class Animated : MonoBehaviour
         }
         currentAnimation.Initialise(currentObject, givenName, givenAnimation, givenColour, isPaused, givenVisible);
         m_animationLayer.Add(givenName, currentAnimation);
+
         return currentAnimation;
     
     }
@@ -102,6 +104,5 @@ public abstract class Animated : MonoBehaviour
             m_animationLayer[item.Key].SetVisible(visible);
         }
     }
-
 }
 

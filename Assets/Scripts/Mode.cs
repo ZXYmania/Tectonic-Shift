@@ -6,6 +6,7 @@ using System.Runtime.Serialization.Formatters.Binary;
 using Unity.Jobs;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 public interface Clickable
@@ -16,6 +17,15 @@ public interface Clickable
     public void OnHover();
 
     public void UnHover();
+}
+
+public interface UserAction
+{
+	public int GetPriority();
+	public bool IsPermanent();
+	public void Execute();
+	public void Undo();
+
 }
 
 public interface DrawController
@@ -41,6 +51,10 @@ public abstract class Mode : MonoBehaviour
     private static float camera_speed = 45;
     public static Mode current_mode { get; protected set; }
 	protected static List<JobHandle> finished_jobs = new List<JobHandle>();
+	protected static bool focused;
+	public List<UserAction> current_actions;
+	public List<UserAction> history;
+	public List<UserAction> reverted_history;
 
 	public void SetUp()
     {
@@ -51,11 +65,36 @@ public abstract class Mode : MonoBehaviour
         m_camera.orthographicSize = Map.size.y / 2;
         m_camera.transform.position = new Vector3(Map.size.x / 2, Map.size.y / 2, -10);
 		Menu.Initialise(m_camera);
+		/*TextField.Selected += Focus;
+		TextField.UnSelected += Unfocus;*/
+		history = new List<UserAction>();
+		reverted_history = new List<UserAction>();
+		current_actions = new List<UserAction>();
 	}
 
 	public static float GetCameraSize()
     {
 		return m_camera.orthographicSize;
+    }
+
+	public static void ChangeFocus(InputFieldLayer given_field)
+	{
+		focused = given_field.Selected();
+	}
+
+	public static bool IsFocused()
+    {
+		return focused;
+    }
+	public static void AddToQueue(UserAction givenAction)
+	{
+		current_mode.current_actions.Add(givenAction);
+	}
+
+	protected static void FlushHistory()
+    {
+		current_mode.history.RemoveAll((item) => !item.IsPermanent());
+		current_mode.reverted_history.RemoveAll((item) => !item.IsPermanent());
     }
 
 	public class PathScheduler<T> where T : struct, DrawController
@@ -81,6 +120,13 @@ public abstract class Mode : MonoBehaviour
 			Map.FindPath<T>.current.Add( controller_id);
 		}
 
+		public void ScheduleFindPath(Tile start, Tile end, T given_controller)
+		{
+			path = new Map.FindPath<T>(start, end, given_controller);
+			controller_id = path.m_id;
+			current_job = path.Schedule();
+			Map.FindPath<T>.current.Add(controller_id);
+		}
 		public void EndJob()
         {
 			Map.FindPath<T>.current.Remove(controller_id);

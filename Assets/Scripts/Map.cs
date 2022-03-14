@@ -9,6 +9,8 @@ using UnityEngine;
 
 public class Map
 {
+    //1000,500 has serious perfomance issues after load
+    // 800,400 runs fine but allows for big tasks to be kicked off
     public static Position size { get; protected set; } = new Position(200, 100);
     public static int scale { get; protected set; }
     public static Dictionary<Position, Tile> map { get; protected set; }
@@ -167,6 +169,15 @@ public class Map
             m_start = start.position;
             m_destination = destination.position;
             m_controller = new T();
+            m_controller.Initialise();
+        }
+
+        public FindPath(Tile start, Tile destination, T given_controller)
+        {
+            m_id = Guid.NewGuid();
+            m_start = start.position;
+            m_destination = destination.position;
+            m_controller = given_controller;
             m_controller.Initialise();
         }
 

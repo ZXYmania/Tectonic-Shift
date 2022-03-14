@@ -12,22 +12,47 @@ namespace PlateSpace
         {
             Tile.Clicked += OnClick;
             Tile.Hovered += OnHover;
-            //EditPlateMenu.Clicked += OnClick;
             SaveMenu.Save += EditFile;
         }
         public virtual void OnActionLeave()
         {
             Tile.Clicked -= OnClick;
             Tile.Hovered -= OnHover;
-            //EditPlateMenu.Clicked += OnClick;
             SaveMenu.Save -= EditFile;
         }
 
-        public abstract void Unselect();
+        public abstract void UnSelect();
         public abstract void Clear();
-        public abstract void CommitAction();
         public abstract void OnHover(Tile given_tile);
         public abstract void OnClick(Tile given_tile);
+
+        public struct StateAction : UserAction
+        {
+            public PlateState m_state;
+            public StateAction(PlateState givenState)
+            {
+                m_state = givenState;
+            }
+            public void Execute()
+            {
+                PlateMode.ChangeState(m_state);
+            }
+
+            public int GetPriority()
+            {
+                return 0;
+            }
+
+            public bool IsPermanent()
+            {
+                return false;
+            }
+
+            public void Undo()
+            {
+                PlateMode.ChangeState(new DefaultState());
+            }
+        }
 
         protected virtual void EditFile(bool edit_type)
         {
@@ -57,22 +82,16 @@ namespace PlateSpace
         public override void Clear()
         {
         }
-
-        public override void CommitAction()
-        {
-
-        }
-
         public override void OnClick(Tile given_tile)
         {
             Guid plate_id = given_tile.GetProperty<PlateProperty>().plate_id;
             if ( plate_id != new Guid())
             {
-                PlateMode.ChangeState(new EditPlateState(Plate.plate[plate_id]));
+                PlateMode.AddToQueue(new StateAction(new EditPlateState(Plate.plate[plate_id])));
             }
             else
             {
-                PlateMode.ChangeState(new DrawPlateState(given_tile));
+                PlateMode.AddToQueue(new StateAction(new DrawPlateState(given_tile)));
             }
         }
 
@@ -86,7 +105,7 @@ namespace PlateSpace
             hover.OnHover();
         }
 
-        public override void Unselect()
+        public override void UnSelect()
         {
         }
     }

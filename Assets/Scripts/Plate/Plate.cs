@@ -137,7 +137,7 @@ namespace PlateSpace
                     throw new Exception("Plate wasn't created");
                 }
             }
-            catch (Exception e)
+            catch (InvalidContinentShape e)
             {
                 throw new CreatePlateError(e.Message, given_tiles, id);
             }
@@ -465,6 +465,37 @@ namespace PlateSpace
 
         public void UnHover()
         {
+        }
+
+        public void DeletePlate()
+        {
+            if(!plate.ContainsKey(id))
+            {
+                for (int i = 0; i < edge.Count; i++)
+                {
+                    Edge draw_edge = edge[i];
+                    Position direction = edge[i].GetDirection();
+                    int previous_index = i - 1;
+                    for (int j = 0; j < draw_edge.tile.Count; j++)
+                    {
+
+                        if (Map.map[draw_edge.tile[j]].GetProperty<PlateProperty>().plate_id == id)
+                        {
+                           Map.map[draw_edge.tile[j]].SetProperty<PlateProperty>(new PlateProperty(0, Guid.Empty));
+                        }
+                        if (direction.x != 0)
+                        {
+                            Position next_tile = draw_edge.tile[j] + new Position(0, 1);
+                            while (!border.Contains(next_tile) && IsInside(next_tile))
+                            {
+                                Map.map[next_tile].SetProperty<PlateProperty>(new PlateProperty(0, Guid.Empty));
+                                next_tile.y++;
+                            }
+                        }
+
+                    }
+                }
+            }
         }
 
         protected static string GenerateName()

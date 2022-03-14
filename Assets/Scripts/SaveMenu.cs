@@ -14,8 +14,8 @@ public class SaveMenu : Menu
         MenuLayer background = AddAnimationLayer<MenuLayer>("background", "save_menu", Color.green, true);
         background.SetScreenSize(8f); 
         background.m_image.transform.rotation = new Quaternion(0, 0, 90f, 0);
-        ButtonLayer save_button = AddAnimationLayer<ButtonLayer>("save", "save_button", Color.black, true);
-        ButtonLayer load_button = AddAnimationLayer<ButtonLayer>("load", "save_button", Color.black, true);
+        ButtonLayer save_button = AddAnimationLayer<ButtonLayer>("save", "menu_option", Color.black, true);
+        ButtonLayer load_button = AddAnimationLayer<ButtonLayer>("load", "menu_option", Color.black, true);
         save_button.ChangeAnimation(1);
         save_button.SetScreenSize(6f);
         load_button.SetScreenSize(6f);

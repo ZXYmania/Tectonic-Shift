@@ -9,26 +9,19 @@ public class TextField : InputField
 {
     public static event Action<TextField> Selected = delegate { };
     public static event Action<TextField> UnSelected = delegate { };
+    public bool selected { protected set; get; }
     public override void OnSelect(BaseEventData eventData)
     {
         base.OnSelect(eventData);
         Selected(this);
+        selected = true;
     }
 
     public override void OnDeselect(BaseEventData eventData)
     {
         base.OnDeselect(eventData);
         UnSelected(this);
-    }
-
-    
-
-    private void Update()
-    {
-        if(Input.GetKeyDown(KeyCode.Return))
-        {
-            EventSystem.current.SetSelectedGameObject(null);
-        }
+        selected = false;
     }
 }
 
@@ -36,7 +29,7 @@ public class InputFieldLayer : MenuLayer
 {
 
     public Text m_text;
-    public InputField m_input;
+    public TextField m_input;
     public override void Initialise(GameObject given_object, string given_name, string starting_sprite_map, Color given_colour, bool given_toggle, bool given_visible)
     {
         base.Initialise(given_object, given_name, starting_sprite_map, given_colour, given_toggle, given_visible);
@@ -62,6 +55,10 @@ public class InputFieldLayer : MenuLayer
         m_input.caretBlinkRate = 1.25f;
     }
    
+    public bool Selected()
+    {
+        return m_input.selected;
+    }
     public override void DisplayImage()
     {
         m_image.enabled = m_visible;
@@ -88,5 +85,11 @@ public class InputFieldLayer : MenuLayer
     {
         m_input.text = text;
     }
+
+    public void Unselect()
+    {
+        EventSystem.current.SetSelectedGameObject(null);
+    }
+
 
 }

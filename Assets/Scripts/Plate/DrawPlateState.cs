@@ -5,36 +5,136 @@ using UnityEngine;
 using static PlateSpace.PlateMode;
 
 namespace PlateSpace
-{ 
+{
+    public class TextFieldAction : UserAction
+    {
+        InputFieldLayer m_field;
+        public TextFieldAction(InputFieldLayer given_field)
+        {
+            m_field = given_field;
+        }
+        public void Execute()
+        {
+            Mode.ChangeFocus(m_field);
+        }
+
+        public int GetPriority()
+        {
+            return 5;
+        }
+
+        public bool IsPermanent()
+        {
+            return false;
+        }
+
+        public void Undo()
+        {
+            m_field.Unselect();
+            Mode.ChangeFocus(m_field);
+        }
+    }
     public class DrawPlateState : PlateState
     {
-        List<Tile> selected_tile;
+        public class CreatePlateAction : UserAction
+        {
+            public List<Position> m_perimeter;
+            public Guid m_id;
+            public CreatePlateAction(List<Position> given_perimeter)
+            {
+                m_perimeter = given_perimeter;
+            }
+            public void Execute()
+            {
+                try
+                {
+                    m_id = Plate.CreatePlate(m_perimeter).id;
+                }
+                catch (CreatePlateError e)
+                {
+                    Mode.SaveFile<CreatePlateErrorData>(new List<CreatePlateErrorData>() { e.m_data }, e.m_data.m_id + ".dat");
+                }
+                ChangeState(new DefaultState());
+                
+            }
+
+            public int GetPriority()
+            {
+                return 2;
+            }
+
+            public bool IsPermanent()
+            {
+                return true;
+            }
+
+            public void Undo()
+            {
+                if(m_id != Guid.Empty)
+                {
+                    Plate deleted_plate = Plate.plate[m_id];
+                    Plate.plate.Remove(m_id);
+                    deleted_plate.DeletePlate();
+                    m_id = Guid.Empty;
+                }
+            }
+        }
+        public class DrawAction : UserAction
+        {
+            List<Position> m_line;
+            public DrawAction(List<Position> given_line)
+            {
+                m_line = given_line;
+            }
+            public void Execute()
+            {
+                draw_plate_state.AddLine(m_line);
+            }
+
+            public int GetPriority()
+            {
+               return 1;
+            }
+
+            public bool IsPermanent()
+            {
+                return false;
+            }
+
+            public void Undo()
+            {
+                draw_plate_state.RemoveLine(m_line);
+            }
+        }
+
+        
         List<Position> draw_tile;
         List<Position> draw_hover;
         Tile hover;
-        Tile clicked;
         Mode.PathScheduler<PlateDrawController> m_controller;
         bool path_completed;
-
+        protected static DrawPlateState draw_plate_state;
         public DrawPlateState(Tile given_tile)
         {
-            selected_tile = new List<Tile> { given_tile };
-            draw_tile = new List<Position>();
+            draw_tile = new List<Position>() { given_tile.position };
             draw_hover = new List<Position>();
         }
         public override void OnActionEnter()
         {
             Debug.Log("Create state entered");
-            for(int i = 0; i < selected_tile.Count; i++)
+            for(int i = 0; i < draw_tile.Count; i++)
             {
-                if(selected_tile[i].GetProperty<PlateProperty>().plate_id != Guid.Empty)
+                Tile current_tile = Map.map[draw_tile[i]];
+                if (current_tile.GetProperty<PlateProperty>().plate_id != Guid.Empty)
                 {
-                    PlateMode.ChangeState(new DefaultState());
+                    PlateMode.AddToQueue(new StateAction(new DefaultState()));
+                    return;
                 }
-                selected_tile[i].UnHover();
-                selected_tile[i].OnSelect();
+                current_tile.UnHover();
+                current_tile.OnSelect();
             }
             Map.FindPath<PlateDrawController>.FoundPath += DrawComplete;
+            draw_plate_state = this;
             base.OnActionEnter();
         }
 
@@ -42,7 +142,7 @@ namespace PlateSpace
         {
             Clear();
             Map.FindPath<PlateDrawController>.FoundPath -= DrawComplete;
-           base.OnActionLeave();
+            base.OnActionLeave();
         }
 
         public void DrawComplete(List<Position> draw_path)
@@ -59,54 +159,70 @@ namespace PlateSpace
             path_completed = true;
         }
 
-        public override void CommitAction()
+        protected void AddLine(List<Position> given_line)
         {
-            if (path_completed && clicked != null)
+            if(draw_tile.Count ==1)
             {
-                selected_tile.Add(clicked);
+                draw_tile.Clear();
+            }
+            for (int i = 0; i < given_line.Count; i++)
+            {
+                Tile current_tile = Map.map[given_line[i]];
+                current_tile.UnHover();
+                current_tile.OnSelect();
+                draw_tile.Add(current_tile.position);
+            }
+            ClearHover();
+        }
+
+        protected void RemoveLine(List<Position> given_line)
+        {
+            if(!(given_line[given_line.Count-1] == draw_tile[draw_tile.Count-1]
+                && given_line[0] == draw_tile[draw_tile.Count-given_line.Count]))
+            {
+                throw new Exception("Line not deleted correctly");
+            }
+            for (int i = 0; i < given_line.Count; i++)
+            {
+                Tile current_tile = Map.map[draw_tile[draw_tile.Count-1]];
+                current_tile.UnSelect();
+                draw_tile.RemoveAt(draw_tile.Count - 1);
+            }
+            Tile redraw = hover;
+            hover = null;
+            if (draw_tile.Count == 0)
+            {
+                draw_tile.Add(given_line[0]);
+            }
+            OnHover(redraw);
+        }
+
+        public override void OnClick(Tile given_tile)
+        {
+            if(path_completed)
+            {
                 for (int i = 0; i < draw_hover.Count; i++)
                 {
                     Map.map[draw_hover[i]].UnHover();
                     Map.map[draw_hover[i]].OnSelect();
                 }
-                if (draw_tile.Contains(clicked.position))
+                if (draw_tile.Contains(given_tile.position))
                 {
                     draw_tile.AddRange(draw_hover);
-                    try
-                    {
-                        Plate.CreatePlate(new List<Position>(draw_tile));
-                    }
-                    catch (CreatePlateError e)
-                    {
-                        Mode.SaveFile<CreatePlateErrorData>(new List<CreatePlateErrorData>() { e.m_data }, e.m_data.m_id + ".dat");
-                    }
-                    ChangeState(new DefaultState());
+                    Mode.AddToQueue(new CreatePlateAction(new List<Position>(draw_tile) ));
                 }
                 else
                 {
-                    for(int i = 0; i < draw_hover.Count; i++)
-                    {
-                        Tile current_tile = Map.map[draw_hover[i]];
-                        current_tile.UnHover();
-                        current_tile.OnSelect();
-                        draw_tile.Add(current_tile.position);
-                    }
+                    Mode.AddToQueue(new DrawAction(new List<Position>(draw_hover)));
                 }
-
             }
-            clicked = null;
-        }
-
-        public override void OnClick(Tile given_tile)
-        {
-            clicked = given_tile;
         }
 
         public override void OnHover(Tile given_tile)
         {
             if (hover != given_tile)
             {
-                Tile start = selected_tile[selected_tile.Count - 1];
+                Position start = draw_tile[draw_tile.Count - 1];
                 path_completed = false;
                 if(m_controller != null)
                 {
@@ -114,34 +230,17 @@ namespace PlateSpace
                     ClearHover();
                 }
                 m_controller = new Mode.PathScheduler<PlateDrawController>();
-                m_controller.ScheduleFindPath(start, given_tile);
+                m_controller.ScheduleFindPath(Map.map[start], given_tile);
                 hover = given_tile;
             }
         }
 
-        public override void Unselect()
+        public override void UnSelect()
         {
-            if(clicked == null)
+            if (draw_tile.Count == 1)
             {
-                selected_tile[selected_tile.Count - 1].UnSelect();
-                selected_tile.RemoveAt(selected_tile.Count - 1);
-                if (selected_tile.Count == 0)
-                {
-                    ChangeState(new DefaultState());
-                    return;
-                }
-                int index = draw_tile.LastIndexOf(selected_tile[selected_tile.Count - 1].position);
-                List<Position> to_remove = draw_tile.GetRange(index, draw_tile.Count - index);
-                draw_tile.RemoveRange(index, draw_tile.Count - index);
-                for(int i = 0; i < to_remove.Count; i++)
-                {
-                    Map.map[to_remove[i]].UnSelect();
-                }
-                Tile redraw = hover;
-                hover = null;
-                OnHover(redraw);
+               Mode.AddToQueue(new StateAction(new DefaultState()));
             }
-            clicked = null;
         }
         public void ClearHover()
         {
@@ -150,22 +249,17 @@ namespace PlateSpace
                 Map.map[draw_hover[i]].UnHover();
             }
             draw_hover.Clear();
+
         }
 
         public override void Clear()
         {
-            for (int i = 0; i < selected_tile.Count; i++)
-            {
-                selected_tile[i].UnSelect();
-            }
-            selected_tile.Clear();
             for (int i = 0; i < draw_tile.Count; i++)
             {
                 Map.map[draw_tile[i]].UnSelect();
             }
             draw_tile.Clear();
             ClearHover();
-            clicked = null;
         }
     }
     public class EditPlateState : PlateState
@@ -176,7 +270,6 @@ namespace PlateSpace
         List<Position> draw_tile;
         List<Position> draw_hover;
         Tile hover;
-        Tile clicked;
 
         public EditPlateState(Plate given_plate)
         {
@@ -188,19 +281,19 @@ namespace PlateSpace
 
         public override void OnActionEnter()
         {
+            base.OnActionEnter();
             m_menu = Menu.CreateMenu<EditPlateMenu>();
             m_menu.SetPlate(m_plate);
             EditPlateMenu.Clicked += OnClick;
-            base.OnActionEnter();
+
         }
         public override void OnActionLeave()
         {
-            m_menu = null;
-            EditPlateMenu.Clicked -= OnClick;
             base.OnActionLeave();
-        }
-        public override void CommitAction()
-        {
+            EditPlateMenu.Clicked -= OnClick;
+            Clear();
+            UnityEngine.Object.Destroy(m_menu.gameObject);
+
         }
 
         public override void OnClick(Tile given_tile)
@@ -208,12 +301,18 @@ namespace PlateSpace
 
             if(given_tile.GetProperty<PlateProperty>().plate_id != m_plate.id)
             {
-                ChangeState(new DefaultState());
+                Mode.AddToQueue(new StateAction(new DefaultState()));
             }
         }
 
         public void OnClick(EditPlateMenu given_menu)
         {
+            InputFieldLayer selected = given_menu.GetSelectedTextField();
+            if (selected != null)
+            {
+                Mode.AddToQueue(new TextFieldAction(selected));
+                //Change textfields to InputFieldLayer to take the action against the layer
+            }
 
         }
 
@@ -221,9 +320,16 @@ namespace PlateSpace
         {
         }
 
-        public override void Unselect()
+        public override void UnSelect()
         {
-            throw new NotImplementedException();
+            if(!Mode.IsFocused())
+            {
+                Mode.AddToQueue(new StateAction(new DefaultState()));
+            }
+            else
+            {
+                m_menu.GetSelectedTextField().Unselect();
+            }
         }
         public override void Clear()
         {
@@ -238,7 +344,6 @@ namespace PlateSpace
             }
             draw_tile.Clear();
             ClearHover();
-            clicked = null;
             m_menu.UnSelect();
         }
         public void ClearHover()

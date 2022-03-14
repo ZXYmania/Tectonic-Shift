@@ -13,32 +13,10 @@ namespace PlateSpace
     public class PlateMode : Mode
     {
         public static event Action<Guid> EndFindPath = delegate { };
-        protected static bool focused;
         Dictionary<string,Menu> m_menu;
         protected static PlateState current_state;
+        //public List<UserAction> temp_history;
 
-        protected T GetMenu<T>() where T : Menu
-        {
-            return (T)m_menu[typeof(T).Name];
-        }
-
-        public static void ChangeState(PlateState next_state)
-        {
-            current_state.OnActionLeave();
-            current_state.Clear();
-            next_state.OnActionEnter();
-            PlateMode.current_state = next_state;
-        }
-        protected EditPlateMenu GetPlateMenu(Plate selected_plate)
-        {
-            if (!m_menu.ContainsKey(typeof(EditPlateMenu).Name))
-            {
-                m_menu[typeof(EditPlateMenu).Name] = Menu.CreateMenu<EditPlateMenu>();
-            }
-            EditPlateMenu menu = GetMenu<EditPlateMenu>();
-            menu.SetPlate(selected_plate);
-            return menu;
-        }
         void Start()
         {
             if (current_mode == null)
@@ -53,12 +31,22 @@ namespace PlateSpace
             Mode.current_mode = this;
             selected = new List<Clickable>();
             m_menu = new Dictionary<string, Menu>();
-            TextField.Selected += Focus;
-            TextField.UnSelected += Unfocus;
             Tile.draw_property = typeof(PlateProperty).Name;
             SaveMenu save = Menu.CreateMenu<SaveMenu>();
             current_state = new DefaultState();
             current_state.OnActionEnter();
+        }
+        protected T GetMenu<T>() where T : Menu
+        {
+            return (T)m_menu[typeof(T).Name];
+        }
+
+        public static void ChangeState(PlateState next_state)
+        {
+            current_state.OnActionLeave();
+            next_state.OnActionEnter();
+            PlateMode.current_state = next_state;
+            FlushHistory();
         }
 
         void Update()
@@ -66,13 +54,75 @@ namespace PlateSpace
             if (!focused)
             {
                 MoveCamera();
-                if (Input.GetKeyDown(KeyCode.Mouse1))
+                if (current_actions.Count > 0)
                 {
-                    current_state.Unselect();
+                    current_actions.Sort((UserAction item1, UserAction item2) => item1.GetPriority().CompareTo(item2.GetPriority()));
+                    UserAction current_action = current_actions.First();
+                    current_action.Execute();
+                    try
+                    {
+                        if(reverted_history.Count> 0)
+                        {
+                            reverted_history.Clear();
+                        }
+                        history.Add(current_action);
+                    }
+                    catch (Exception e)
+                    {
+                        throw e;
+                    }
+                    current_actions.Clear();
                 }
-                else
+                else if(Input.GetKeyDown(KeyCode.RightArrow))
                 {
-                    current_state.CommitAction();
+                    if(reverted_history.Count > 0)
+                    {
+                        UserAction redo_action = reverted_history[reverted_history.Count-1];
+                        reverted_history.RemoveAt(reverted_history.Count - 1);
+                        history.Add(redo_action);
+                        redo_action.Execute();
+                    }
+                }
+                else if(Input.GetKeyDown(KeyCode.LeftArrow))
+                {
+                    try
+                    {
+                        current_actions.Clear();
+                        if (history.Count > 0)
+                        {
+                            UserAction reverted_action = history[history.Count - 1];
+                            history.RemoveAt(history.Count - 1);
+                            reverted_history.Add(reverted_action);
+                            reverted_action.Undo();
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        throw e;
+                    }
+                    current_actions.Clear();
+                }
+                else if (Input.GetKeyDown(KeyCode.Mouse1))
+                {
+                    try
+                    {
+                        current_actions.Clear();
+                        if (history.Count > 0)
+                        {
+                            UserAction reverted_action = history[history.Count - 1];
+                            if (!reverted_action.IsPermanent())
+                            {
+                                history.RemoveAt(history.Count - 1);
+                                reverted_history.Add(reverted_action);
+                                reverted_action.Undo();
+                            }
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        throw e;
+                    }
+                    current_actions.Clear();
                 }
             }
         }
@@ -96,78 +146,6 @@ namespace PlateSpace
         public static void KillPath(Guid given_id)
         {
             EndFindPath(given_id);
-        }
-
-        /*public void OnClick(Tile given_tile)
-        {
-            selected.Add(given_tile);
-            PlateProperty tile_property = given_tile.GetProperty<PlateProperty>();
-            if (tile_property.plate_id != Guid.Empty)
-            {
-                Clear();
-                Plate selected_plate = Plate.plate[tile_property.plate_id];
-                EditPlateMenu menu = GetPlateMenu(selected_plate);
-                if (selected_plate.border.Contains(given_tile.position))
-                {
-                    menu.OnSelect();
-                }
-                else
-                {
-                    selected.Add(selected_plate);
-                    selected[0].OnSelect();
-                    menu.OnSelect();
-                }
-            }
-            else if (selected.Count > 1)
-            {
-                if (draw_hover.Count > 0 && draw_hover[draw_hover.Count - 1] == given_tile.position)
-                {
-                    for (int i = 0; i < draw_hover.Count; i++)
-                    {
-                        Map.map[draw_hover[i]].UnHover();
-                        Map.map[draw_hover[i]].OnSelect();
-                    }
-                    draw_selected.AddRange(draw_hover);
-                    draw_hover.Clear();
-                }
-                else
-                {
-                    selected.RemoveAt(selected.Count - 1);
-                }
-            }
-
-        }
-
-        public void OnClick(EditPlateMenu given_menu)
-        {
-            Debug.Log("Menu event started");
-        }
-
-
-
-        public void UnHover(Tile given_tile)
-        {
-            given_tile.UnHover();
-        }
-
-        /*public void UnSelect(Clickable unselected)
-        {
-             if (selected[0] is Plate)
-            {
-                GetMenu<EditPlateMenu>().UnSelect();
-                Clear();
-            }
-            
-        }*/
-
-        public void Focus(TextField given_field)
-        {
-            focused = true;
-        }
-
-        public void Unfocus(TextField given_field)
-        {
-            focused = false;
         }
 
         public override void OnModeEnter()

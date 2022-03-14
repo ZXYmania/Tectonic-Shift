@@ -38,6 +38,15 @@ public struct Anchor
 
 public class MenuLayer : ImageAnimationLayer
 {
+    BoxCollider2D m_collider;
+    public void Initialise(GameObject givenObject, string givenName, string startingSpriteMap, Color givenColour, bool givenToggle, bool givenVisible, bool boxCollider)
+    {
+        base.Initialise(givenObject, givenName, startingSpriteMap, givenColour, givenToggle, givenVisible);
+        if(boxCollider)
+        {
+            AddBoxCollider();
+        }
+    }
     public override void Initialise(GameObject givenObject, string givenName, string startingSpriteMap, Color givenColour, bool givenToggle, bool givenVisible)
     {
         base.Initialise(givenObject, givenName, startingSpriteMap, givenColour, givenToggle, givenVisible);
@@ -57,6 +66,10 @@ public class MenuLayer : ImageAnimationLayer
         else
         {
             SetAnimationSize(givenSize * Menu.PercentageofScreen.y);
+        }
+        if(m_collider != null)
+        {
+            m_collider.size = m_image.rectTransform.rect.size;
         }
     }
 
@@ -81,6 +94,15 @@ public class MenuLayer : ImageAnimationLayer
         }
         offset *= 0.5f;
         return offset;
+    }
+
+    public void AddBoxCollider()
+    {
+        if (m_collider == null)
+        {
+            m_collider = m_image.gameObject.AddComponent<BoxCollider2D>();
+            m_collider.size = m_image.rectTransform.rect.size;
+        }
     }
 
 }
